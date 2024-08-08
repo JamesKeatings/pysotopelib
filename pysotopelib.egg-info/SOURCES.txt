@@ -1,0 +1,11 @@
+setup.py
+pysotopelib/CStoZ.py
+pysotopelib/Decay.py
+pysotopelib/IntegrateDecay.py
+pysotopelib/ZtoCS.py
+pysotopelib/__init__.py
+pysotopelib.egg-info/PKG-INFO
+pysotopelib.egg-info/SOURCES.txt
+pysotopelib.egg-info/dependency_links.txt
+pysotopelib.egg-info/requires.txt
+pysotopelib.egg-info/top_level.txt
