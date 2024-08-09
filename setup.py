@@ -6,5 +6,5 @@ setup(
     version='0.1.0',
     description='Python library for nuclear physics',
     author='James Keatings',
-    install_requires=['numpy']
+    install_requires=['numpy','matplotlib','scipy']
 )

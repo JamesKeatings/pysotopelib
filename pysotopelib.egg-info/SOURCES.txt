@@ -1,7 +1,10 @@
+README.md
 setup.py
 pysotopelib/CStoZ.py
+pysotopelib/Calibrate.py
 pysotopelib/Decay.py
 pysotopelib/IntegrateDecay.py
+pysotopelib/ReadAscii.py
 pysotopelib/ZtoCS.py
 pysotopelib/__init__.py
 pysotopelib.egg-info/PKG-INFO
