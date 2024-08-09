@@ -127,7 +127,7 @@ def calibrate_efficiency(data):
 
             # Optional: Plot the fit for visual inspection
             plt.figure()
-            plt.plot(x_roi, y_roi, 'b-', label='Data')
+            plt.step(x_roi, y_roi, 'b-', label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
             plt.plot(x_roi, gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
             plt.axvline(mu, color='g', linestyle='--', label=f'Centroid: {mu:.2f}')
             plt.title(f'Fit around {e:.2f} keV')
