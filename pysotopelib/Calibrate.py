@@ -68,24 +68,24 @@ def gaussian_with_background(x, A, mu, sigma, m, c):
     return A * np.exp(-(x - mu) ** 2 / (2 * sigma ** 2)) + m * x + c
 
 # Alternative function
-def efficiency_RadWare(EG, A, B, C, D, E):
+def efficiency_RadWare(EG, A, B, C, D, E, Scale):
     E1 = 100.0
     E2 = 1000.0
     G = 15
     x = np.log(EG / E1)
     y = np.log(EG / E2)   
-    exponent = ((A + B*x)**(-G)+(C + D*y + E*y**2)**(-G))**(-1/G)
+    exponent = Scale * ((A + B*x)**(-G)+(C + D*y + E*y**2)**(-G))**(-1/G)
     
     return np.exp(exponent)
 
 
 # Alternative function
-def efficiency_Log(EG, A, B, C, D, E):
+def efficiency_Log(EG, A, B, C, D, E, Scale):
     E0 = 325.0
     s = np.log(EG / E0)
     exponent = A * s + B * s**2 + C * s**3 + D * s**4 + E * s**5
     
-    return np.exp(exponent)
+    return Scale * np.exp(exponent)
 
 
 # Calibration function Radware
@@ -93,7 +93,7 @@ def calibrate_efficiency_Radware(data, scale):
     # Define the energy array within the function
     #energy = np.array([80.998, 121.7824, 244.6989, 344.2811, 411.126, 443.965, 778.903, 867.390, 964.055, 1085.842, 1089.767, 1112.087, 1212.970, 1299.152, 1408.022])
     # Define the intensity and error_intensity arrays
-    #intensity = np.array([34.11, 28.37, 7.53, 26.57, 2.238, 3.125, 12.97, 4.214, 14.63, 10.13, 1.731, 13.54, 1.412, 1.626, 20.85])
+    #intensity = np.array([42.64, 28.37, 7.53, 26.57, 2.238, 3.125, 12.97, 4.214, 14.63, 10.13, 1.731, 13.54, 1.412, 1.626, 20.85])
     #error_intensity = np.array([0.28, 0.13, 0.04, 0.11, 0.010, 0.014, 0.06, 0.025, 0.06, 0.05, 0.009, 0.06, 0.008, 0.011, 0.09])
 
     energy_152Eu, error_energy_152Eu, intensity_152Eu, error_intensity_152Eu = info_152Eu()
@@ -119,6 +119,13 @@ def calibrate_efficiency_Radware(data, scale):
     y_values = data[:, 1]
 
     results = []
+    num_plots = len(energy)  # Number of subplots needed
+    ncols = 4  # Number of columns for subplots
+    nrows = int(np.ceil(num_plots / ncols))  # Calculate number of rows
+
+    # Create a figure with subplots
+    fig, axes = plt.subplots(nrows, ncols, figsize=(16, 12))
+    axes = axes.flatten()  # Flatten the axes array for easy iteration
 
     # Define the fitting region around each energy peak
     for i, e in enumerate(energy):
@@ -143,16 +150,15 @@ def calibrate_efficiency_Radware(data, scale):
             # results.append({'energy': e, 'centroid': mu, 'area': area, 'intensity': intensity[i], 'error_intensity': error_intensity[i]})
             results.append({'energy': e, 'centroid': mu, 'area': area, 'intensity': intensity[i], 'error_intensity': np.sqrt(area)})
 
-            # Optional: Plot the fit for visual inspection
-            plt.figure()
-            plt.step(x_roi, y_roi, label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
-            plt.plot(x_roi, gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
-            plt.axvline(mu, color='g', linestyle='--', label=f'Centroid: {mu:.2f}')
-            plt.title(f'Fit around {e:.2f} keV')
-            plt.xlabel('Energy [keV]')
-            plt.ylabel(f'Counts [{x_values[1]} keV/ch]')
-            plt.legend()
-            plt.show()
+            # Plot the fit for visual inspection
+            ax = axes[i]  # Select the current subplot
+            ax.step(x_roi, y_roi, label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
+            ax.plot(x_roi, gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
+            ax.axvline(mu, color='g', linestyle='--', label=f'Centroid: {mu:.2f}')
+            ax.set_title(f'Fit around {e:.2f} keV')
+            ax.set_xlabel('Energy [keV]')
+            ax.set_ylabel(f'Counts [{x_values[1]} keV/ch]')
+            ax.legend()
 
         except RuntimeError:
             print(f"Fit could not be performed for peak around {e:.2f} keV")
@@ -189,16 +195,18 @@ def calibrate_efficiency_Radware(data, scale):
     
 
     # Initial guess for the parameters A, B, C, D, E
-    initial_guess2 = [0.8851239, 1.92979759, 0.39965769, -0.62558024, -0.04598688] # for Radware efficiency
+    initial_guess2 = [0.8851239, 1.92979759, 0.39965769, -0.62558024, -0.04598688, 0.5] # for Radware efficiency
     #initial_guess2 = [2.529, -0.5, -0.07, 0.07, 0.034] # for Log efficiency
         
     # Perform the curve fitting
     popt2, pcov2 = curve_fit(efficiency_RadWare, energies, normalized_areas, p0=initial_guess2, sigma=errors, absolute_sigma=True)
-    A, B, C, D, E = popt2
+    A, B, C, D, E, Scale = popt2
     print("Fit parameters:", popt2)
 
     # Generate a range of energies for plotting
     plot_energies = np.arange(energies.min(), energies.max())
+
+    #popt2 = [ 0.77726656,  2.47711261,  0.39965775, -0.62558048, -0.04598727 ]
 
     # Calculate the fitted values
     fit_values = efficiency_RadWare(plot_energies, *popt2)
@@ -230,11 +238,47 @@ def calibrate_efficiency_Radware(data, scale):
     #file_path = "fit_values.txt"
     #with open(file_path, 'w') as file:
         #for energy, fit_val, fit_err in zip(plot_energies, fit_values, fit_std):
-            #file.write(f"Energy: {energy:.0f} keV, Fit: {fit_val:.6f} +/- {fit_err:.6f}")
+            #file.write(f"Energy: {energy:.0f} keV, Fit: {fit_val:.6f} +/- {fit_err:.6f}\n")
 
+    x_152Eu = []
+    points_152Eu = []
+    errors_152Eu = []
+
+    for energy_value in energy_152Eu:
+        # Find the indices where energies match the current value from energy_133Ba
+        matching_indices = np.where(energies == energy_value)[0]
+    
+        # Flatten or index to get scalar values
+        if matching_indices.size > 0:  # Ensure matching indices are found
+            x_152Eu.append(energies[matching_indices][0])
+            points_152Eu.append(normalized_areas[matching_indices][0])
+            errors_152Eu.append(errors[matching_indices][0])
+
+    x_133Ba = []
+    points_133Ba = []
+    errors_133Ba = []
+
+    for energy_value in energy_133Ba:
+        # Find the indices where energies match the current value from energy_133Ba
+        matching_indices = np.where(energies == energy_value)[0]
+    
+        # Flatten or index to get scalar values
+        if matching_indices.size > 0:  # Ensure matching indices are found
+            x_133Ba.append(energies[matching_indices][0])
+            points_133Ba.append(normalized_areas[matching_indices][0])
+            errors_133Ba.append(errors[matching_indices][0])
+        
+
+    #print("152Eu x:", x_152Eu)
+    #print("152Eu y:", points_152Eu)
+    #print("133Ba x:", x_133Ba)
+    #print("133Ba y:", points_133Ba)    
+    
+    
     # Plotting the results
     plt.figure()
-    plt.errorbar(energies, normalized_areas, yerr=errors, fmt="o", label='Data')
+    plt.errorbar(x_152Eu, points_152Eu, yerr=errors_152Eu, fmt="x", label='152Eu Data')
+    plt.errorbar(x_133Ba, points_133Ba, yerr=errors_133Ba, fmt="o", label='133Ba Data') 
     plt.plot(plot_energies, fit_values, 'r-', label='Fit')
     plt.fill_between(plot_energies, lower_bound, upper_bound, color='red', alpha=0.15, label='Confidence Interval (1σ)')
     plt.xlabel('Energy [keV]')
@@ -273,6 +317,13 @@ def calibrate_efficiency_Log(data, scale):
     y_values = data[:, 1]
 
     results = []
+    num_plots = len(energy)  # Number of subplots needed
+    ncols = 4  # Number of columns for subplots
+    nrows = int(np.ceil(num_plots / ncols))  # Calculate number of rows
+
+    # Create a figure with subplots
+    fig, axes = plt.subplots(nrows, ncols, figsize=(16, 12))
+    axes = axes.flatten()  # Flatten the axes array for easy iteration
 
     # Define the fitting region around each energy peak
     for i, e in enumerate(energy):
@@ -297,16 +348,15 @@ def calibrate_efficiency_Log(data, scale):
             # results.append({'energy': e, 'centroid': mu, 'area': area, 'intensity': intensity[i], 'error_intensity': error_intensity[i]})
             results.append({'energy': e, 'centroid': mu, 'area': area, 'intensity': intensity[i], 'error_intensity': np.sqrt(area)})
 
-            # Optional: Plot the fit for visual inspection
-            plt.figure()
-            plt.step(x_roi, y_roi, label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
-            plt.plot(x_roi, gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
-            plt.axvline(mu, color='g', linestyle='--', label=f'Centroid: {mu:.2f}')
-            plt.title(f'Fit around {e:.2f} keV')
-            plt.xlabel('Energy [keV]')
-            plt.ylabel(f'Counts [{x_values[1]} keV/ch]')
-            plt.legend()
-            plt.show()
+            # Plot the fit for visual inspection
+            ax = axes[i]  # Select the current subplot
+            ax.step(x_roi, y_roi, label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
+            ax.plot(x_roi, gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
+            ax.axvline(mu, color='g', linestyle='--', label=f'Centroid: {mu:.2f}')
+            ax.set_title(f'Fit around {e:.2f} keV')
+            ax.set_xlabel('Energy [keV]')
+            ax.set_ylabel(f'Counts [{x_values[1]} keV/ch]')
+            ax.legend()
 
         except RuntimeError:
             print(f"Fit could not be performed for peak around {e:.2f} keV")
@@ -344,11 +394,11 @@ def calibrate_efficiency_Log(data, scale):
 
     # Initial guess for the parameters A, B, C, D, E
     #initial_guess2 = [2.66, 1.9, 0.39965769, -0.62558024, -0.04598688] # for Radware efficiency
-    initial_guess2 = [2.529, -0.5, -0.07, 0.07, 0.034] # for Log efficiency
+    initial_guess2 = [2.529, -0.5, -0.07, 0.07, 0.034, 1] # for Log efficiency
         
     # Perform the curve fitting
     popt2, pcov2 = curve_fit(efficiency_Log, energies, normalized_areas, p0=initial_guess2, sigma=errors, absolute_sigma=True)
-    A, B, C, D, E = popt2
+    A, B, C, D, E, Scale = popt2
     print("Fit parameters:", popt2)
 
     # Generate a range of energies for plotting
@@ -381,14 +431,51 @@ def calibrate_efficiency_Log(data, scale):
     lower_bound = fit_values - fit_std
 
     # Open a file for writing
-    #file_path = "fit_values.txt"
-    #with open(file_path, 'w') as file:
-        #for energy, fit_val, fit_err in zip(plot_energies, fit_values, fit_std):
-            #file.write(f"Energy: {energy:.0f} keV, Fit: {fit_val:.6f} +/- {fit_err:.6f}")
+    file_path = "fit_values.txt"
+    with open(file_path, 'w') as file:
+        for energy, fit_val, fit_err in zip(plot_energies, fit_values, fit_std):
+            file.write(f"Energy: {energy:.0f} keV, Fit: {fit_val:.6f} +/- {fit_err:.6f}\n")
 
+
+    x_152Eu = []
+    points_152Eu = []
+    errors_152Eu = []
+
+    for energy_value in energy_152Eu:
+        # Find the indices where energies match the current value from energy_133Ba
+        matching_indices = np.where(energies == energy_value)[0]
+    
+        # Flatten or index to get scalar values
+        if matching_indices.size > 0:  # Ensure matching indices are found
+            x_152Eu.append(energies[matching_indices][0])
+            points_152Eu.append(normalized_areas[matching_indices][0])
+            errors_152Eu.append(errors[matching_indices][0])
+
+    x_133Ba = []
+    points_133Ba = []
+    errors_133Ba = []
+
+    for energy_value in energy_133Ba:
+        # Find the indices where energies match the current value from energy_133Ba
+        matching_indices = np.where(energies == energy_value)[0]
+    
+        # Flatten or index to get scalar values
+        if matching_indices.size > 0:  # Ensure matching indices are found
+            x_133Ba.append(energies[matching_indices][0])
+            points_133Ba.append(normalized_areas[matching_indices][0])
+            errors_133Ba.append(errors[matching_indices][0])
+        
+
+    #print("152Eu x:", x_152Eu)
+    #print("152Eu y:", points_152Eu)
+    #print("133Ba x:", x_133Ba)
+    #print("133Ba y:", points_133Ba)    
+    
+    
     # Plotting the results
     plt.figure()
-    plt.errorbar(energies, normalized_areas, yerr=errors, fmt="o", label='Data')
+    plt.errorbar(x_152Eu, points_152Eu, yerr=errors_152Eu, fmt="x", label='152Eu Data')
+    plt.errorbar(x_133Ba, points_133Ba, yerr=errors_133Ba, fmt="o", label='133Ba Data') 
     plt.plot(plot_energies, fit_values, 'r-', label='Fit')
     plt.fill_between(plot_energies, lower_bound, upper_bound, color='red', alpha=0.15, label='Confidence Interval (1σ)')
     plt.xlabel('Energy [keV]')
