@@ -431,10 +431,10 @@ def calibrate_efficiency_Log(data, scale):
     lower_bound = fit_values - fit_std
 
     # Open a file for writing
-    file_path = "fit_values.txt"
-    with open(file_path, 'w') as file:
-        for energy, fit_val, fit_err in zip(plot_energies, fit_values, fit_std):
-            file.write(f"Energy: {energy:.0f} keV, Fit: {fit_val:.6f} +/- {fit_err:.6f}\n")
+    #file_path = "fit_values.txt"
+    #with open(file_path, 'w') as file:
+        #for energy, fit_val, fit_err in zip(plot_energies, fit_values, fit_std):
+            #file.write(f"Energy: {energy:.0f} keV, Fit: {fit_val:.6f} +/- {fit_err:.6f}\n")
 
 
     x_152Eu = []
