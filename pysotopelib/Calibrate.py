@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy.optimize import minimize
+from scipy.optimize import approx_fprime
 
 def info_133Ba():
     energy = np.array([80.998, 276.398, 302.853, 356.017, 383.851])
@@ -49,54 +50,68 @@ def readascii(filename):
     # Plot the histogram
     plt.figure(figsize=(8, 6))
     #plt.hist(x_values, bins=len(x_values), weights=y_values, color='blue', alpha=0.7, linewidth=3)
-    plt.step(x_values, y_values, where='post', color='blue', alpha=0.7, linewidth=1)  
+    plt.step(x_values, y_values, where='mid', color='blue', alpha=0.7, linewidth=1)  
     
     # Set the x-axis range manually
     plt.xlim(x_min, x_max)
     
-    plt.xlabel('Energy (keV)')
-    plt.ylabel('Counts')
+    plt.xlabel('Energy [keV]')
+    plt.ylabel(f'Counts [{x_values[1]} keV/ch]')
 
     # Show the plot
     plt.show()
 
     return data
 
-
 # Gaussian with linear background function
 def gaussian_with_background(x, A, mu, sigma, m, c):
     return A * np.exp(-(x - mu) ** 2 / (2 * sigma ** 2)) + m * x + c
 
-def efficiency_function(EG, A, B, D, E, F):
-    E1 = 100.0  # Given E1
-    E2 = 1000.0 # Given E2
-    s = np.log(EG / E1)
-    t = np.log(EG / E2)
-    return np.exp(( (A + B * s)**(-15) + (D + E * t + F * t**(-15)) )**(-1/15))
+# Alternative function
+def efficiency_RadWare(EG, A, B, C, D, E):
+    E1 = 100.0
+    E2 = 1000.0
+    G = 15
+    x = np.log(EG / E1)
+    y = np.log(EG / E2)   
+    exponent = ((A + B*x)**(-G)+(C + D*y + E*y**2)**(-G))**(-1/G)
     
-def efficiency_function2(EG, A, B, C, D, E):
+    return np.exp(exponent)
+
+
+# Alternative function
+def efficiency_Log(EG, A, B, C, D, E):
     E0 = 325.0
-    return np.exp(A*np.log(EG/E0) + B*np.log(EG/E0)**2 + C*np.log(EG/E0)**3 + D*np.log(EG/E0)**4 + E*np.log(EG/E0)**5)
-
-def cost_function(params, energies, normalized_areas, errors):
-    A, B, D, E, F = params
-    # Prevent division by zero in error array by replacing zero errors with a small value
-    errors = np.clip(errors, 1e-10, None)
-    model_values = efficiency_function2(energies, A, B, D, E, F)
-    return np.sum(((normalized_areas - model_values) / errors) ** 2)
+    s = np.log(EG / E0)
+    exponent = A * s + B * s**2 + C * s**3 + D * s**4 + E * s**5
+    
+    return np.exp(exponent)
 
 
-def calibrate_efficiency(data):
+# Calibration function
+def calibrate_efficiency(data, scale):
     # Define the energy array within the function
-    energy = np.array([80.998, 
-        121.7824, 244.6989, 344.2811, 411.126, 443.965, 778.903,
-        867.390, 964.055, 1085.842, 1089.767, 1112.087, 1212.970,
-        1299.152, 1408.022
-    ])
-
+    #energy = np.array([80.998, 121.7824, 244.6989, 344.2811, 411.126, 443.965, 778.903, 867.390, 964.055, 1085.842, 1089.767, 1112.087, 1212.970, 1299.152, 1408.022])
     # Define the intensity and error_intensity arrays
-    intensity = np.array([34.11, 28.37, 7.53, 26.57, 2.238, 3.125, 12.97, 4.214, 14.63, 10.13, 1.731, 13.54, 1.412, 1.626, 20.85])
-    error_intensity = np.array([0.28, 0.13, 0.04, 0.11, 0.010, 0.014, 0.06, 0.025, 0.06, 0.05, 0.009, 0.06, 0.008, 0.011, 0.09])
+    #intensity = np.array([34.11, 28.37, 7.53, 26.57, 2.238, 3.125, 12.97, 4.214, 14.63, 10.13, 1.731, 13.54, 1.412, 1.626, 20.85])
+    #error_intensity = np.array([0.28, 0.13, 0.04, 0.11, 0.010, 0.014, 0.06, 0.025, 0.06, 0.05, 0.009, 0.06, 0.008, 0.011, 0.09])
+
+    energy_152Eu, error_energy_152Eu, intensity_152Eu, error_intensity_152Eu = info_152Eu()
+    energy_133Ba, error_energy_133Ba, intensity_133Ba, error_intensity_133Ba = info_133Ba()
+    
+    #intensity_133Ba = intensity_133Ba/1.5
+
+    unsorted_energy = np.concatenate((energy_152Eu, energy_133Ba))
+    unsorted_error_energy = np.concatenate((error_energy_152Eu, error_energy_133Ba))
+    unsorted_intensity = np.concatenate((intensity_152Eu, intensity_133Ba))
+    unsorted_error_intensity = np.concatenate((error_intensity_152Eu, error_intensity_133Ba))
+
+    sorted_indices = np.argsort(unsorted_energy)
+
+    energy = unsorted_energy[sorted_indices]
+    error_energy = unsorted_error_energy[sorted_indices]
+    intensity = unsorted_intensity[sorted_indices]
+    error_intensity = unsorted_error_intensity[sorted_indices]
 
     x_values = data[:, 0]
     y_values = data[:, 1]
@@ -115,7 +130,7 @@ def calibrate_efficiency(data):
         initial_guess = [np.max(y_roi), e, 1.0, 0, np.min(y_roi)]
 
         try:
-            # Perform the curve fitting
+            # Perform the curve fitting using curve_fit
             popt, pcov = curve_fit(gaussian_with_background, x_roi, y_roi, p0=initial_guess)
             A, mu, sigma, m, c = popt
 
@@ -123,16 +138,17 @@ def calibrate_efficiency(data):
             area = A * sigma * np.sqrt(2 * np.pi)
 
             # Store the results along with the corresponding energy and intensity
-            results.append({'energy': e, 'centroid': mu, 'area': area, 'intensity': intensity[i], 'error_intensity': error_intensity[i]})
+            # results.append({'energy': e, 'centroid': mu, 'area': area, 'intensity': intensity[i], 'error_intensity': error_intensity[i]})
+            results.append({'energy': e, 'centroid': mu, 'area': area, 'intensity': intensity[i], 'error_intensity': np.sqrt(area)})
 
             # Optional: Plot the fit for visual inspection
             plt.figure()
-            plt.step(x_roi, y_roi, 'b-', label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
+            plt.step(x_roi, y_roi, label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
             plt.plot(x_roi, gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
             plt.axvline(mu, color='g', linestyle='--', label=f'Centroid: {mu:.2f}')
             plt.title(f'Fit around {e:.2f} keV')
-            plt.xlabel('Energy (keV)')
-            plt.ylabel('Counts')
+            plt.xlabel('Energy [keV]')
+            plt.ylabel(f'Counts [{x_values[1]} keV/ch]')
             plt.legend()
             plt.show()
 
@@ -143,45 +159,81 @@ def calibrate_efficiency(data):
     if not results:
         return {}
 
-# Extract areas and normalize with respect to the most intense peak
+    # Extract areas and normalize with respect to the most intense peak
     areas = np.array([result['area'] for result in results])
     max_area = np.max(areas)
     normalized_areas = areas / max_area * 100  # Multiply by 100
+    
 
     # Prepare the data for fitting the efficiency function
     energies = np.array([result['energy'] for result in results])
     intensities = np.array([result['intensity'] for result in results])
+    areas = np.array([result['area'] for result in results])
     errors = np.array([result['error_intensity'] for result in results])
 
     # Normalize areas by intensities
     normalized_areas = normalized_areas / intensities
-    errors = errors / intensities
+    # errors =  (errors / area) / intensities
+    errors =  (errors / area) * 300
 
-    # Add the point (0, 0) to the data before fitting
-    energies = np.insert(energies, 0, 0)
-    normalized_areas = np.insert(normalized_areas, 0, 0)
-    errors = np.insert(errors, 0, 0.1)  # Use a small nonzero error for (0,0)
+    activityscale = scale
 
-    # Initial guess for the parameters A, B, D, E, F
-    initial_guess = [2.66, 1.9, 2.08, -0.71, -0.04]
+    for energy_value in energy_133Ba:
+        # Find the indices where energies match the current value from energy_133Ba
+        matching_indices = np.where(energies == energy_value)[0]
+        
+        # Multiply the corresponding values in normalized_areas by the constant
+        normalized_areas[matching_indices] *= activityscale
 
-    # Perform the minimization
-    result = minimize(cost_function, initial_guess, args=(energies, normalized_areas, errors))
+    # Initial guess for the parameters A, B, C, D, E
+    initial_guess2 = [2.66, 1.9, 2.08, -0.71, -0.04]
+        
+    # Perform the curve fitting
+    popt2, pcov2 = curve_fit(efficiency_RadWare, energies, normalized_areas, p0=initial_guess2, sigma=errors, absolute_sigma=True)
+    A, B, C, D, E = popt2
+    print("Fit parameters:", popt2)
 
-    # Extract the optimized parameters
-    A_opt, B_opt, D_opt, E_opt, F_opt = result.x
+    # Generate a range of energies for plotting
+    plot_energies = np.arange(energies.min(), energies.max())
 
-    # Display the optimized parameters
-    print(f"Optimized parameters: A={A_opt}, B={B_opt}, D={D_opt}, E={E_opt}, F={F_opt}")
+    # Calculate the fitted values
+    fit_values = efficiency_RadWare(plot_energies, *popt2)
 
-    # Plot the fitted efficiency function against the data
+    # Calculate the confidence intervals
+    # Initialize an array to store the variances at each energy point
+    fit_var = np.zeros(len(plot_energies))
+
+    # Propagate the uncertainties using the covariance matrix
+    for i in range(len(popt2)):
+        for j in range(len(popt2)):
+            # Compute the derivative of the fit function with respect to each parameter
+            deriv_i = (efficiency_RadWare(plot_energies, *(popt2 + np.eye(len(popt2))[i] * np.sqrt(np.diag(pcov2))[i])) -
+                       efficiency_RadWare(plot_energies, *popt2)) / np.sqrt(np.diag(pcov2))[i]
+            deriv_j = (efficiency_RadWare(plot_energies, *(popt2 + np.eye(len(popt2))[j] * np.sqrt(np.diag(pcov2))[j])) -
+                       efficiency_RadWare(plot_energies, *popt2)) / np.sqrt(np.diag(pcov2))[j]
+            
+            # Add to the variance
+            fit_var += deriv_i * deriv_j * pcov2[i, j]
+
+    # The standard deviation (1-sigma) of the fit is the square root of the variance
+    fit_std = np.sqrt(fit_var)
+
+    # Define the upper and lower bounds
+    upper_bound = fit_values + fit_std
+    lower_bound = fit_values - fit_std
+
+    # Open a file for writing
+    #file_path = "fit_values.txt"
+    #with open(file_path, 'w') as file:
+        #for energy, fit_val, fit_err in zip(plot_energies, fit_values, fit_std):
+            #file.write(f"Energy: {energy:.0f} keV, Fit: {fit_val:.6f} +/- {fit_err:.6f}")
+
+    # Plotting the results
     plt.figure()
-    plt.errorbar(energies, normalized_areas, yerr=errors, fmt='o', label='Data')
-    plt.plot(energies, efficiency_function2(energies, A_opt, B_opt, D_opt, E_opt, F_opt), 'r-', label='Fit')
-    plt.xlabel('Energy (keV)')
-    plt.ylabel('Normalized Efficiency')
-    plt.title('Efficiency Calibration')
+    plt.errorbar(energies, normalized_areas, yerr=errors, fmt="o", label='Data')
+    plt.plot(plot_energies, fit_values, 'r-', label='Fit')
+    plt.fill_between(plot_energies, lower_bound, upper_bound, color='red', alpha=0.15, label='Confidence Interval (1σ)')
+    plt.xlabel('Energy [keV]')
+    plt.ylabel('Efficiency [Rel.]')
     plt.legend()
     plt.show()
-
-    return result
