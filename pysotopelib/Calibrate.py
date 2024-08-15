@@ -182,7 +182,7 @@ def calibrate_efficiency_Radware(data, scale):
     # Normalize areas by intensities
     normalized_areas = normalized_areas / intensities
     # errors =  (errors / area) / intensities
-    errors =  (errors / area) * 300
+    errors =  (errors / area) * 100
 
     
     activityscale = scale
@@ -380,7 +380,7 @@ def calibrate_efficiency_Log(data, scale):
     # Normalize areas by intensities
     normalized_areas = normalized_areas / intensities
     # errors =  (errors / area) / intensities
-    errors =  (errors / area) * 300
+    errors =  (errors / area) * 100
 
     
     activityscale = scale
