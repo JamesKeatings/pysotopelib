@@ -7,7 +7,7 @@ from scipy.optimize import approx_fprime
 from scipy.signal import find_peaks
 from scipy.signal import savgol_filter
 
-def info_133Ba():
+def _info_133Ba():
     energy = np.array([80.998, 276.398, 302.853, 356.017, 383.851])
     error_energy = np.array([0.005, 0.001, 0.001, 0.002, 0.003])
     intensity = np.array ([34.11, 7.147, 18.30, 61.94, 8.905])
@@ -16,7 +16,7 @@ def info_133Ba():
     return energy, error_energy, intensity, error_intensity
 
 
-def info_152Eu():
+def _info_152Eu():
     #energy = np.array([121.7824, 244.6989, 344.2811, 411.126, 443.965, 778.903, 867.390, 964.055, 1085.842, 1089.767, 1112.087, 1212.970, 1299.152, 1408.022])    
     #error_energy = np.array([0.0004, 0.0010, 0.0019, 0.003, 0.004, 0.006, 0.006, 0.004, 0.004, 0.14, 0.006, 0.013, 0.009, 0.004])
     #intensity = np.array ([28.37, 7.53, 26.57, 2.238, 3.125, 12.97, 4.214, 14.63, 10.13, 1.731, 13.54, 1.412, 1.626, 20.85])
@@ -30,7 +30,7 @@ def info_152Eu():
     return energy, error_energy, intensity, error_intensity
 
 
-def info_60Co():
+def _info_60Co():
     energy = np.array([1173.238, 1332.502])    
     error_energy = np.array([0.004, 0.005])
     intensity = np.array ([99.857, 99.983])
@@ -39,7 +39,7 @@ def info_60Co():
     return energy, error_energy, intensity, error_intensity
 
 
-def readascii(filename):
+def readascii(filename, showplot=False):
     # Read the file and load the data into a NumPy array
     data = np.loadtxt(filename)
 
@@ -53,29 +53,29 @@ def readascii(filename):
     else:
         raise ValueError("The file must contain either one or two columns")
 
-    # Determine the range based on min and max of x-values
-    x_min = x_values.min()
-    x_max = x_values.max()
+    if showplot:
+        # Determine the range based on min and max of x-values
+        x_min = x_values.min()
+        x_max = x_values.max()
 
-    # Plot the histogram
-    plt.figure(figsize=(8, 6))
-    #plt.hist(x_values, bins=len(x_values), weights=y_values, color='blue', alpha=0.7, linewidth=3)
-    plt.step(x_values, y_values, where='mid', color='blue', alpha=0.7, linewidth=1)  
+        # Plot the histogram
+        plt.figure(figsize=(8, 6))
+        #plt.hist(x_values, bins=len(x_values), weights=y_values, color='blue', alpha=0.7, linewidth=3)
+        plt.step(x_values, y_values, where='mid', color='blue', alpha=0.7, linewidth=1)  
     
-    # Set the x-axis range manually
-    plt.xlim(x_min, x_max)
-    
-    plt.xlabel('Energy [keV]')
-    plt.ylabel(f'Counts [{x_values[1]} keV/ch]')
+        # Set the x-axis range manually
+        plt.xlim(x_min, x_max)
+        plt.xlabel('Energy [keV]')
+        plt.ylabel(f'Counts [{x_values[1]} keV/ch]')
 
-    # Show the plot
-    plt.show()
+        # Show the plot
+        plt.show()
 
     return data
 
 
 # Gaussian with linear background function
-def gaussian_with_background(x, A, mu, sigma, m, c):
+def _gaussian_with_background(x, A, mu, sigma, m, c):
     return A * np.exp(-(x - mu) ** 2 / (2 * sigma ** 2)) + m * x + c
  
 # Quadratic function  
@@ -85,7 +85,7 @@ def quadratic(x, a, b, c):
 
 
 # Alternative function
-def efficiency_Radware(EG, A, B, C, D, E, Scale):
+def _efficiency_Radware(EG, A, B, C, D, E, Scale):
     E1 = 100.0
     E2 = 1000.0
     G = 15
@@ -97,7 +97,7 @@ def efficiency_Radware(EG, A, B, C, D, E, Scale):
 
 
 # Alternative function
-def efficiency_Log(EG, A, B, C, D, E, Scale):
+def _efficiency_Log(EG, A, B, C, D, E, Scale):
     E0 = 325.0
     s = np.log(EG / E0)
     exponent = A * s + B * s**2 + C * s**3 + D * s**4 + E * s**5
@@ -106,15 +106,15 @@ def efficiency_Log(EG, A, B, C, D, E, Scale):
 
 
 # Calibration function Radware
-def calibrate_efficiency_Radware(data, scale=1):
+def _calibrate_efficiency_Radware(data, scale=1):
     # Define the energy array within the function
     #energy = np.array([80.998, 121.7824, 244.6989, 344.2811, 411.126, 443.965, 778.903, 867.390, 964.055, 1085.842, 1089.767, 1112.087, 1212.970, 1299.152, 1408.022])
     # Define the intensity and error_intensity arrays
     #intensity = np.array([34.11, 28.37, 7.53, 26.57, 2.238, 3.125, 12.97, 4.214, 14.63, 10.13, 1.731, 13.54, 1.412, 1.626, 20.85])
     #error_intensity = np.array([0.28, 0.13, 0.04, 0.11, 0.010, 0.014, 0.06, 0.025, 0.06, 0.05, 0.009, 0.06, 0.008, 0.011, 0.09])
 
-    energy_152Eu, error_energy_152Eu, intensity_152Eu, error_intensity_152Eu = info_152Eu()
-    energy_133Ba, error_energy_133Ba, intensity_133Ba, error_intensity_133Ba = info_133Ba()
+    energy_152Eu, error_energy_152Eu, intensity_152Eu, error_intensity_152Eu = _info_152Eu()
+    energy_133Ba, error_energy_133Ba, intensity_133Ba, error_intensity_133Ba = _info_133Ba()
     
     #intensity_133Ba = intensity_133Ba/1.5
 
@@ -158,7 +158,7 @@ def calibrate_efficiency_Radware(data, scale=1):
 
         try:
             # Perform the curve fitting using curve_fit
-            popt, pcov = curve_fit(gaussian_with_background, x_roi, y_roi, p0=initial_guess)
+            popt, pcov = curve_fit(_gaussian_with_background, x_roi, y_roi, p0=initial_guess)
             A, mu, sigma, m, c = popt
 
             # Calculate the area under the Gaussian peak
@@ -171,7 +171,7 @@ def calibrate_efficiency_Radware(data, scale=1):
             # Plot the fit for visual inspection
             ax = axes[i]  # Select the current subplot
             ax.step(x_roi, y_roi, label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
-            ax.plot(x_roi, gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
+            ax.plot(x_roi, _gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
             ax.axvline(mu, color='g', linestyle='--', label=f'Centroid: {mu:.2f}')
             ax.set_title(f'Fit around {e:.2f} keV')
             ax.set_xlabel('Energy [keV]')
@@ -219,7 +219,7 @@ def calibrate_efficiency_Radware(data, scale=1):
     initial_guess2 = [2.529, -0.5, -0.07, 0.07, 0.034, 1] # for Log efficiency
         
     # Perform the curve fitting
-    popt2, pcov2 = curve_fit(efficiency_Radware, energies, normalized_areas, p0=initial_guess2, sigma=errors, absolute_sigma=True)
+    popt2, pcov2 = curve_fit(_efficiency_Radware, energies, normalized_areas, p0=initial_guess2, sigma=errors, absolute_sigma=True)
     A, B, C, D, E, Scale = popt2
     print("Fit parameters:", popt2)
 
@@ -227,7 +227,7 @@ def calibrate_efficiency_Radware(data, scale=1):
     plot_energies = np.arange(energies.min(), energies.max())
 
     # Calculate the fitted values
-    fit_values = efficiency_Radware(plot_energies, *popt2)
+    fit_values = _efficiency_Radware(plot_energies, *popt2)
 
     # Calculate the confidence intervals
     # Initialize an array to store the variances at each energy point
@@ -237,10 +237,10 @@ def calibrate_efficiency_Radware(data, scale=1):
     for i in range(len(popt2)):
         for j in range(len(popt2)):
             # Compute the derivative of the fit function with respect to each parameter
-            deriv_i = (efficiency_Radware(plot_energies, *(popt2 + np.eye(len(popt2))[i] * np.sqrt(np.diag(pcov2))[i])) -
-                       efficiency_Radware(plot_energies, *popt2)) / np.sqrt(np.diag(pcov2))[i]
-            deriv_j = (efficiency_Radware(plot_energies, *(popt2 + np.eye(len(popt2))[j] * np.sqrt(np.diag(pcov2))[j])) -
-                       efficiency_Radware(plot_energies, *popt2)) / np.sqrt(np.diag(pcov2))[j]
+            deriv_i = (_efficiency_Radware(plot_energies, *(popt2 + np.eye(len(popt2))[i] * np.sqrt(np.diag(pcov2))[i])) -
+                       _efficiency_Radware(plot_energies, *popt2)) / np.sqrt(np.diag(pcov2))[i]
+            deriv_j = (_efficiency_Radware(plot_energies, *(popt2 + np.eye(len(popt2))[j] * np.sqrt(np.diag(pcov2))[j])) -
+                       _efficiency_Radware(plot_energies, *popt2)) / np.sqrt(np.diag(pcov2))[j]
             
             # Add to the variance
             fit_var += deriv_i * deriv_j * pcov2[i, j]
@@ -293,7 +293,7 @@ def calibrate_efficiency_Radware(data, scale=1):
     #print("133Ba x:", x_133Ba)
     #print("133Ba y:", points_133Ba)    
     
-    
+    """
     # Plotting the results
     plt.figure()
     plt.errorbar(x_152Eu, points_152Eu, yerr=errors_152Eu, fmt="x", label='152Eu Data')
@@ -304,17 +304,60 @@ def calibrate_efficiency_Radware(data, scale=1):
     plt.ylabel('Efficiency [Rel.]')
     plt.legend()
     plt.show()
+    """
+    # Create a new figure for the results and differences
+    fig2, axes2 = plt.subplots(2, 1, figsize=(10, 7), gridspec_kw={'height_ratios': [2, 1]})
+    
+    # Plotting the results
+    plt.subplot(2, 1, 1)  # Top subplot
+    plt.errorbar(x_152Eu, points_152Eu, yerr=errors_152Eu, fmt="x", label='152Eu Data')
+    plt.errorbar(x_133Ba, points_133Ba, yerr=errors_133Ba, fmt="o", label='133Ba Data') 
+    plt.plot(plot_energies, fit_values, 'r-', label='Fit')
+    plt.fill_between(plot_energies, lower_bound, upper_bound, color='red', alpha=0.15, label='Confidence Interval (1σ)')
+    plt.xlabel('Energy [keV]')
+    plt.ylabel('Efficiency [Rel.]')
+    plt.legend()
+   
+
+    # Calculate the differences between calibrated points and reference points
+    points_152Eu = np.array(points_152Eu)
+    x_152Eu = np.array(x_152Eu)
+    points_133Ba = np.array(points_133Ba)
+    x_133Ba = np.array(x_133Ba)
+    
+    # Calculate the fitted values
+    fit_values_152Eu = _efficiency_Log(x_152Eu, *popt2)
+    fit_values_133Ba = _efficiency_Log(x_133Ba, *popt2)
+    
+    # Calculate the differences between calibrated points and reference points
+    differences_152Eu = points_152Eu - fit_values_152Eu
+    differences_133Ba = points_133Ba - fit_values_133Ba
+    
+    # Plot differences as a function of energy
+    plt.subplot(2, 1, 2)  # Bottom subplot
+    plt.errorbar(x_152Eu, differences_152Eu, yerr=errors_152Eu, fmt="x", label='152Eu Data')
+    plt.errorbar(x_133Ba, differences_133Ba, yerr=errors_133Ba, fmt="o", label='133Ba Data') 
+    plt.axhline(0, color='black', linestyle='--', label='Zero Difference')
+    plt.fill_between(plot_energies, -fit_std, fit_std, color='red', alpha=0.15)
+    #plt.plot(plot_energies, fit_std, 'r-')
+    #plt.plot(plot_energies, -fit_std, 'r-')
+    
+    plt.xlabel('Energy [keV]')
+    plt.ylabel('Difference [Rel.]')
+    plt.xlim(0, x_152Eu[-1]+100)
+    plt.show()
+    
     
 # Calibration function Log
-def calibrate_efficiency_Log(data, scale=1):
+def _calibrate_efficiency_Log(data, scale=1):
     # Define the energy array within the function
     #energy = np.array([80.998, 121.7824, 244.6989, 344.2811, 411.126, 443.965, 778.903, 867.390, 964.055, 1085.842, 1089.767, 1112.087, 1212.970, 1299.152, 1408.022])
     # Define the intensity and error_intensity arrays
     #intensity = np.array([34.11, 28.37, 7.53, 26.57, 2.238, 3.125, 12.97, 4.214, 14.63, 10.13, 1.731, 13.54, 1.412, 1.626, 20.85])
     #error_intensity = np.array([0.28, 0.13, 0.04, 0.11, 0.010, 0.014, 0.06, 0.025, 0.06, 0.05, 0.009, 0.06, 0.008, 0.011, 0.09])
 
-    energy_152Eu, error_energy_152Eu, intensity_152Eu, error_intensity_152Eu = info_152Eu()
-    energy_133Ba, error_energy_133Ba, intensity_133Ba, error_intensity_133Ba = info_133Ba()
+    energy_152Eu, error_energy_152Eu, intensity_152Eu, error_intensity_152Eu = _info_152Eu()
+    energy_133Ba, error_energy_133Ba, intensity_133Ba, error_intensity_133Ba = _info_133Ba()
     
     #intensity_133Ba = intensity_133Ba/1.5
 
@@ -357,7 +400,7 @@ def calibrate_efficiency_Log(data, scale=1):
 
         try:
             # Perform the curve fitting using curve_fit
-            popt, pcov = curve_fit(gaussian_with_background, x_roi, y_roi, p0=initial_guess)
+            popt, pcov = curve_fit(_gaussian_with_background, x_roi, y_roi, p0=initial_guess)
             A, mu, sigma, m, c = popt
 
             # Calculate the area under the Gaussian peak
@@ -370,7 +413,7 @@ def calibrate_efficiency_Log(data, scale=1):
             # Plot the fit for visual inspection
             ax = axes[i]  # Select the current subplot
             ax.step(x_roi, y_roi, label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
-            ax.plot(x_roi, gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
+            ax.plot(x_roi, _gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
             ax.axvline(mu, color='g', linestyle='--', label=f'Centroid: {mu:.2f}')
             ax.set_title(f'Fit around {e:.2f} keV')
             ax.set_xlabel('Energy [keV]')
@@ -418,7 +461,7 @@ def calibrate_efficiency_Log(data, scale=1):
     initial_guess2 = [2.529, -0.5, -0.07, 0.07, 0.034, 1] # for Log efficiency
         
     # Perform the curve fitting
-    popt2, pcov2 = curve_fit(efficiency_Log, energies, normalized_areas, p0=initial_guess2, sigma=errors, absolute_sigma=True)
+    popt2, pcov2 = curve_fit(_efficiency_Log, energies, normalized_areas, p0=initial_guess2, sigma=errors, absolute_sigma=True)
     A, B, C, D, E, Scale = popt2
     print("Fit parameters:", popt2)
 
@@ -426,7 +469,7 @@ def calibrate_efficiency_Log(data, scale=1):
     plot_energies = np.arange(energies.min(), energies.max())
 
     # Calculate the fitted values
-    fit_values = efficiency_Log(plot_energies, *popt2)
+    fit_values = _efficiency_Log(plot_energies, *popt2)
 
     # Calculate the confidence intervals
     # Initialize an array to store the variances at each energy point
@@ -436,10 +479,10 @@ def calibrate_efficiency_Log(data, scale=1):
     for i in range(len(popt2)):
         for j in range(len(popt2)):
             # Compute the derivative of the fit function with respect to each parameter
-            deriv_i = (efficiency_Log(plot_energies, *(popt2 + np.eye(len(popt2))[i] * np.sqrt(np.diag(pcov2))[i])) -
-                       efficiency_Log(plot_energies, *popt2)) / np.sqrt(np.diag(pcov2))[i]
-            deriv_j = (efficiency_Log(plot_energies, *(popt2 + np.eye(len(popt2))[j] * np.sqrt(np.diag(pcov2))[j])) -
-                       efficiency_Log(plot_energies, *popt2)) / np.sqrt(np.diag(pcov2))[j]
+            deriv_i = (_efficiency_Log(plot_energies, *(popt2 + np.eye(len(popt2))[i] * np.sqrt(np.diag(pcov2))[i])) -
+                       _efficiency_Log(plot_energies, *popt2)) / np.sqrt(np.diag(pcov2))[i]
+            deriv_j = (_efficiency_Log(plot_energies, *(popt2 + np.eye(len(popt2))[j] * np.sqrt(np.diag(pcov2))[j])) -
+                       _efficiency_Log(plot_energies, *popt2)) / np.sqrt(np.diag(pcov2))[j]
             
             # Add to the variance
             fit_var += deriv_i * deriv_j * pcov2[i, j]
@@ -487,14 +530,18 @@ def calibrate_efficiency_Log(data, scale=1):
             errors_133Ba.append(errors[matching_indices][0])
         
 
+
+
     #print("152Eu x:", x_152Eu)
     #print("152Eu y:", points_152Eu)
     #print("133Ba x:", x_133Ba)
     #print("133Ba y:", points_133Ba)    
     
+    # Create a new figure for the results and differences
+    fig2, axes2 = plt.subplots(2, 1, figsize=(10, 7), gridspec_kw={'height_ratios': [2, 1]})
     
     # Plotting the results
-    plt.figure()
+    plt.subplot(2, 1, 1)  # Top subplot
     plt.errorbar(x_152Eu, points_152Eu, yerr=errors_152Eu, fmt="x", label='152Eu Data')
     plt.errorbar(x_133Ba, points_133Ba, yerr=errors_133Ba, fmt="o", label='133Ba Data') 
     plt.plot(plot_energies, fit_values, 'r-', label='Fit')
@@ -502,11 +549,39 @@ def calibrate_efficiency_Log(data, scale=1):
     plt.xlabel('Energy [keV]')
     plt.ylabel('Efficiency [Rel.]')
     plt.legend()
-    plt.show()
+   
 
+    # Calculate the differences between calibrated points and reference points
+    points_152Eu = np.array(points_152Eu)
+    x_152Eu = np.array(x_152Eu)
+    points_133Ba = np.array(points_133Ba)
+    x_133Ba = np.array(x_133Ba)
+    
+    # Calculate the fitted values
+    fit_values_152Eu = _efficiency_Log(x_152Eu, *popt2)
+    fit_values_133Ba = _efficiency_Log(x_133Ba, *popt2)
+    
+    # Calculate the differences between calibrated points and reference points
+    differences_152Eu = points_152Eu - fit_values_152Eu
+    differences_133Ba = points_133Ba - fit_values_133Ba
+    
+    # Plot differences as a function of energy
+    plt.subplot(2, 1, 2)  # Bottom subplot
+    plt.errorbar(x_152Eu, differences_152Eu, yerr=errors_152Eu, fmt="x", label='152Eu Data')
+    plt.errorbar(x_133Ba, differences_133Ba, yerr=errors_133Ba, fmt="o", label='133Ba Data') 
+    plt.axhline(0, color='black', linestyle='--', label='Zero Difference')
+    plt.fill_between(plot_energies, -fit_std, fit_std, color='red', alpha=0.15)
+    #plt.plot(plot_energies, fit_std, 'r-')
+    #plt.plot(plot_energies, -fit_std, 'r-')
+    
+    plt.xlabel('Energy [keV]')
+    plt.ylabel('Difference [Rel.]')
+    plt.xlim(0, x_152Eu[-1]+100)
+    plt.show()
+    
     
 def calibrate_efficiency(data, scale=1):
-    calibrate_efficiency_Log(data, scale)
+    _calibrate_efficiency_Log(data, scale)
 
     
 
@@ -531,8 +606,8 @@ def calibrate_energy(data, height=None, prominence=500000, distance=10, toleranc
     print(f"Peaks found at positions: {peak_positions}")
 
     # Getting energy and related data from 152Eu and 133Ba isotopes
-    energy_152Eu, error_energy_152Eu, intensity_152Eu, error_intensity_152Eu = info_152Eu()
-    energy_133Ba, error_energy_133Ba, intensity_133Ba, error_intensity_133Ba = info_133Ba()
+    energy_152Eu, error_energy_152Eu, intensity_152Eu, error_intensity_152Eu = _info_152Eu()
+    energy_133Ba, error_energy_133Ba, intensity_133Ba, error_intensity_133Ba = _info_133Ba()
 
     # Combine energy data from both sources
     unsorted_energy = np.concatenate((energy_152Eu, energy_133Ba))
@@ -592,13 +667,13 @@ def calibrate_energy(data, height=None, prominence=500000, distance=10, toleranc
 
         try:
             # Perform the curve fitting using curve_fit
-            popt, pcov = curve_fit(gaussian_with_background, x_roi, y_roi, p0=initial_guess)
+            popt, pcov = curve_fit(_gaussian_with_background, x_roi, y_roi, p0=initial_guess)
             A, mu, sigma, m, c = popt
 
             # Plot the fit for visual inspection
             ax = axes[i]  # Select the current subplot
             ax.step(x_roi, y_roi, label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
-            ax.plot(x_roi, gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
+            ax.plot(x_roi, _gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
             ax.axvline(mu, color='g', linestyle='--', label=f'Centroid: {mu:.2f}')
             ax.set_title(f'Fit around {e:.2f} keV')
             ax.set_xlabel('Energy [keV]')
@@ -647,11 +722,14 @@ def calibrate_energy(data, height=None, prominence=500000, distance=10, toleranc
     plt.scatter(valid_energy, differences, label='Differences', color='orange')
     plt.axhline(0, color='black', linestyle='--', label='Zero Difference')
 
-    #plt.fill_between(x_fit, difference_lower, difference_upper, color='red', alpha=0.3, label='Error Region')
-    plt.axhline(0.3, color='red', linestyle='-')
-    plt.axhline(-0.3, color='red', linestyle='-')    
+    plt.fill_between(x_fit, -0.3, 0.3, color='red', alpha=0.3)
+    #plt.axhline(0.3, color='red', linestyle='-')
+    #plt.axhline(-0.3, color='red', linestyle='-')    
     plt.xlabel('Energy [keV]')
     plt.ylabel('Difference [keV]')
     plt.ylim(-1, 1)  # Adjust y limits to make the subplot shorter
+    
+    
     plt.xlim(0, valid_energy[-1]+100)
     plt.legend()
+    plt.show()
