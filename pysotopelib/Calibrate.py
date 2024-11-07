@@ -584,8 +584,181 @@ def calibrate_efficiency(data, scale=1):
     _calibrate_efficiency_Log(data, scale)
 
     
+def calibrate_energy(data, height=None, prominence=5000, distance=10, tolerance=30, drawhists=True):
+    # Get energy information from isotopes
+    energy_152Eu, error_energy_152Eu, intensity_152Eu, error_intensity_152Eu = _info_152Eu()
+    energy_133Ba, error_energy_133Ba, intensity_133Ba, error_intensity_133Ba = _info_133Ba()
 
-def calibrate_energy(data, height=None, prominence=500000, distance=10, tolerance=5):
+    # Combine and sort the energy data
+    unsorted_energy = np.concatenate((energy_152Eu, energy_133Ba))
+    unsorted_error_energy = np.concatenate((error_energy_152Eu, error_energy_133Ba))
+    unsorted_intensity = np.concatenate((intensity_152Eu, intensity_133Ba))
+    unsorted_error_intensity = np.concatenate((error_intensity_152Eu, error_intensity_133Ba))
+
+    sorted_indices = np.argsort(unsorted_energy)
+    energy = unsorted_energy[sorted_indices]
+    error_energy = unsorted_error_energy[sorted_indices]
+    intensity = unsorted_intensity[sorted_indices]
+    error_intensity = unsorted_error_intensity[sorted_indices]
+
+    if data.ndim == 1:
+        x_values = np.arange(len(data))  # Generate x-values starting from 0
+        y_values = data
+    elif data.shape[1] == 2:
+        x_values = data[:, 0]
+        y_values = data[:, 1]
+    else:
+        raise ValueError("Data must contain either one or two columns")
+
+    # Find peaks in the data
+    smoothed_y = savgol_filter(y_values, window_length=5, polyorder=2)
+    peaks, _ = find_peaks(smoothed_y, height=height, prominence=prominence, distance=distance)
+    
+    #print(x_values[peaks])
+
+    # Map the peak positions to energy values and filter out those below the minimum energy in the dataset
+    min_energy = np.min(energy)  # Get the lowest energy from the sorted list
+    peak_energies = x_values[peaks]  # Assume that `x_values` represent energy bins or calibrated channel positions
+    
+    #print(peak_energies)
+    
+    # Filtering out peaks lower than the minimum energy
+    valid_peaks = peak_energies[peak_energies >= min_energy]
+    
+    #print(valid_peaks)
+
+    # Print out the number of valid peaks
+    num_peaks = len(valid_peaks)
+    #print(f"Number of peaks identified (above minimum energy threshold): {num_peaks}")
+
+    if valid_peaks.any():
+        ratio_first = energy[0] / valid_peaks[0]
+        ratio_last = energy[-1] / valid_peaks[-1]
+        ratio = (ratio_first + ratio_last) / 2
+    else:
+        ratio = None  # No valid peaks found
+
+
+
+    # Step 2: Guess the peak positions based on the ratio
+    guessed_positions = energy / ratio
+
+    # Step 3: Filter out energy peaks that don't have corresponding detected peaks
+    valid_peak_positions = []
+    valid_energy = []
+
+    for i, guess in enumerate(guessed_positions):
+        # Find the closest detected peak to the guessed position
+        closest_peak_idx = np.argmin(np.abs(peak_energies - guess))
+        closest_peak_position = peak_energies[closest_peak_idx]
+
+        # If the detected peak is within the tolerance, keep it
+        if np.abs(closest_peak_position - guess) <= tolerance:
+            valid_peak_positions.append(closest_peak_position)
+            valid_energy.append(energy[i])
+
+    valid_peak_positions = np.array(valid_peak_positions)
+    valid_energy = np.array(valid_energy)
+    
+    #print(valid_peak_positions)
+
+    # Create a figure for centroids fits
+    num_plots = len(valid_energy)  # Number of subplots needed
+    ncols = 4  # Number of columns for subplots
+    nrows = int(np.ceil(num_plots / ncols))  # Calculate number of rows
+
+    # Create subplots for each valid peak fit
+    if drawhists==True:
+        fig, axes = plt.subplots(nrows, ncols, figsize=(16, 12))
+        axes = axes.flatten()  # Flatten the axes array for easy iteration
+
+    mean_values = []
+
+    for i, e in enumerate(valid_peak_positions):
+        roi_width = tolerance / 2
+        roi_mask = (x_values > e - roi_width) & (x_values < e + roi_width)
+        x_roi = x_values[roi_mask]
+        y_roi = y_values[roi_mask]
+
+        initial_guess = [np.max(y_roi), e, 1.0, 0, np.min(y_roi)]
+
+        try:
+            popt, _ = curve_fit(_gaussian_with_background, x_roi, y_roi, p0=initial_guess)
+            A, mu, sigma, m, c = popt
+
+            mean_values.append(mu)  # Store the mean value
+            if drawhists==True:
+                ax = axes[i]
+                ax.step(x_roi, y_roi, label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
+                ax.plot(x_roi, _gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
+                ax.axvline(mu, color='g', linestyle='--', label=f'Centroid: {mu:.2f}')
+                ax.set_title(f'Fit around {e:.2f} keV')
+                ax.set_xlabel('Channel')
+                ax.set_ylabel(f'Counts [{x_values[1]} keV/ch]')
+                ax.legend()
+
+        except RuntimeError:
+            print(f"Fit could not be performed for peak around {e:.2f} keV")
+
+    # Convert mean values list to a NumPy array
+    mean_values_array = np.array(mean_values)
+
+
+    # Step 4: Perform quadratic fit between valid_peak_positions and valid_energy
+    initial_guesses2 = [0.001, ratio, -1]
+    popt, pcov = curve_fit(quadratic, mean_values_array, valid_energy, p0=initial_guesses2)
+    perr = np.sqrt(np.diag(pcov))  # Standard deviation of the parameters
+    print(f"Quadratic fit coefficients: a={popt[0]:.6f}, b={popt[1]:.6f}, c={popt[2]:.6f}")
+
+
+    if drawhists==True:
+        plt.subplots_adjust(left=0.05, bottom=0.05, right=0.95, top=0.95, wspace=0.3, hspace=0.7)
+        # Create a new figure for the quadratic fit and differences
+        fig2, axes2 = plt.subplots(2, 1, figsize=(10, 7), gridspec_kw={'height_ratios': [2, 1]})
+
+        # Plot the quadratic fit of valid_peak_positions vs valid_energy
+        plt.subplot(2, 1, 1)  # Top subplot
+        plt.scatter(mean_values_array, valid_energy, label='Data Points', color='blue')
+        x_fit = np.linspace(np.min(valid_peak_positions), np.max(valid_peak_positions), 100)
+        y_fit = quadratic(x_fit, *popt)
+
+        # Calculate error bounds for the fit
+        y_fit_upper = quadratic(x_fit, popt[0] + perr[0], popt[1] + perr[1], popt[2] + perr[2])
+        y_fit_lower = quadratic(x_fit, popt[0] - perr[0], popt[1] - perr[1], popt[2] - perr[2])
+
+        plt.plot(x_fit, y_fit, 'r-', label='Fit')
+        plt.fill_between(x_fit, y_fit_lower, y_fit_upper, color='red', alpha=0.3, label='Confidence Interval (1σ)')
+        plt.title('Quadratic Fit of Valid Peak Positions vs. Energy')
+        plt.ylabel('Peak Positions [Channels]')
+        plt.xlim(0, mean_values_array[-1]+100)
+        plt.gca().set_xticks([])
+        plt.legend()
+
+        # Calculate the calibrated points using the quadratic fit
+        calibrated_points = quadratic(valid_peak_positions, *popt)
+
+        # Calculate the differences between calibrated points and reference points
+        differences = calibrated_points - valid_energy
+
+        # Plot differences as a function of energy
+        plt.subplot(2, 1, 2)  # Bottom subplot
+        plt.scatter(mean_values_array, differences, label='Differences', color='orange')
+        plt.axhline(0, color='black', linestyle='--', label='Zero Difference')
+
+        plt.fill_between(x_fit, -0.3, 0.3, color='red', alpha=0.3)
+        #plt.axhline(0.3, color='red', linestyle='-')
+        #plt.axhline(-0.3, color='red', linestyle='-')    
+        plt.xlabel('Channel')
+        plt.ylabel('Difference [keV]')
+        plt.ylim(-1, 1)  # Adjust y limits to make the subplot shorter
+        plt.xlim(0, mean_values_array[-1]+100)
+        plt.legend()
+        plt.show()
+    
+    return popt
+
+
+def recalibrate_energy(data, height=None, prominence=500000, distance=10, tolerance=5, drawhists=True):
     
     if data.ndim == 1:
         x_values = np.arange(len(data))  # Generate x-values starting from 0
@@ -599,11 +772,11 @@ def calibrate_energy(data, height=None, prominence=500000, distance=10, toleranc
     # Find peaks in the data
     smoothed_y = savgol_filter(y_values, window_length=5, polyorder=2)
     peaks, _ = find_peaks(smoothed_y, height=height, prominence=prominence, distance=distance)
-    print("Smoothed\n")
+    #print("Smoothed\n")
 
     # Print the peak positions (energies)
     peak_positions = x_values[peaks]
-    print(f"Peaks found at positions: {peak_positions}")
+    #print(f"Peaks found at positions: {peak_positions}")
 
     # Getting energy and related data from 152Eu and 133Ba isotopes
     energy_152Eu, error_energy_152Eu, intensity_152Eu, error_intensity_152Eu = _info_152Eu()
@@ -651,8 +824,9 @@ def calibrate_energy(data, height=None, prominence=500000, distance=10, toleranc
     nrows = int(np.ceil(num_plots / ncols))  # Calculate number of rows
 
     # Create subplots for each valid peak fit
-    fig, axes = plt.subplots(nrows, ncols, figsize=(16, 12))
-    axes = axes.flatten()  # Flatten the axes array for easy iteration
+    if drawhists==True:
+        fig, axes = plt.subplots(nrows, ncols, figsize=(16, 12))
+        axes = axes.flatten()  # Flatten the axes array for easy iteration
 
     # Define the fitting region around each energy peak
     for i, e in enumerate(valid_energy):
@@ -671,65 +845,74 @@ def calibrate_energy(data, height=None, prominence=500000, distance=10, toleranc
             A, mu, sigma, m, c = popt
 
             # Plot the fit for visual inspection
-            ax = axes[i]  # Select the current subplot
-            ax.step(x_roi, y_roi, label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
-            ax.plot(x_roi, _gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
-            ax.axvline(mu, color='g', linestyle='--', label=f'Centroid: {mu:.2f}')
-            ax.set_title(f'Fit around {e:.2f} keV')
-            ax.set_xlabel('Energy [keV]')
-            ax.set_ylabel(f'Counts [{x_values[1]} keV/ch]')
-            ax.legend()
+            if drawhists==True:
+                ax = axes[i]  # Select the current subplot
+                ax.step(x_roi, y_roi, label='Data', where='post', color='blue', alpha=0.7, linewidth=1)
+                ax.plot(x_roi, _gaussian_with_background(x_roi, *popt), 'r--', label='Fit')
+                ax.axvline(mu, color='g', linestyle='--', label=f'Centroid: {mu:.2f}')
+                ax.set_title(f'Fit around {e:.2f} keV')
+                ax.set_xlabel('Energy [keV]')
+                ax.set_ylabel(f'Counts [{x_values[1]} keV/ch]')
+                ax.legend()
 
         except RuntimeError:
             print(f"Fit could not be performed for peak around {e:.2f} keV")
 
-    plt.subplots_adjust(left=0.05, bottom=0.05, right=0.95, top=0.95, wspace=0.3, hspace=0.7)
 
-    # Step 4: Perform quadratic fit between valid_peak_positions and valid_energy
+    # Perform curve fitting with initial parameter guesses
     popt, pcov = curve_fit(quadratic, valid_peak_positions, valid_energy)
     perr = np.sqrt(np.diag(pcov))  # Standard deviation of the parameters
     print(f"Quadratic fit coefficients: a={popt[0]:.6f}, b={popt[1]:.6f}, c={popt[2]:.6f}")
 
-    # Create a new figure for the quadratic fit and differences
-    fig2, axes2 = plt.subplots(2, 1, figsize=(10, 7), gridspec_kw={'height_ratios': [2, 1]})
+    if drawhists==True:
+        plt.subplots_adjust(left=0.05, bottom=0.05, right=0.95, top=0.95, wspace=0.3, hspace=0.7)
+        # Create a new figure for the quadratic fit and differences
+        fig2, axes2 = plt.subplots(2, 1, figsize=(10, 7), gridspec_kw={'height_ratios': [2, 1]})
 
-    # Plot the quadratic fit of valid_peak_positions vs valid_energy
-    plt.subplot(2, 1, 1)  # Top subplot
-    plt.scatter(valid_energy, valid_peak_positions, label='Data Points', color='blue')
-    x_fit = np.linspace(np.min(valid_peak_positions), np.max(valid_peak_positions), 100)
-    y_fit = quadratic(x_fit, *popt)
+        # Plot the quadratic fit of valid_peak_positions vs valid_energy
+        plt.subplot(2, 1, 1)  # Top subplot
+        plt.scatter(valid_energy, valid_peak_positions, label='Data Points', color='blue')
+        x_fit = np.linspace(np.min(valid_peak_positions), np.max(valid_peak_positions), 100)
+        y_fit = quadratic(x_fit, *popt)
 
-    # Calculate error bounds for the fit
-    y_fit_upper = quadratic(x_fit, popt[0] + perr[0], popt[1] + perr[1], popt[2] + perr[2])
-    y_fit_lower = quadratic(x_fit, popt[0] - perr[0], popt[1] - perr[1], popt[2] - perr[2])
+        # Calculate error bounds for the fit
+        y_fit_upper = quadratic(x_fit, popt[0] + perr[0], popt[1] + perr[1], popt[2] + perr[2])
+        y_fit_lower = quadratic(x_fit, popt[0] - perr[0], popt[1] - perr[1], popt[2] - perr[2])
 
-    plt.plot(x_fit, y_fit, 'r-', label='Fit')
-    plt.fill_between(x_fit, y_fit_lower, y_fit_upper, color='red', alpha=0.3, label='Confidence Interval (1σ)')
-    plt.title('Quadratic Fit of Valid Peak Positions vs. Energy')
-    plt.ylabel('Peak Positions [Channels]')
-    plt.xlim(0, valid_energy[-1]+100)
-    plt.gca().set_xticks([])
-    plt.legend()
+        plt.plot(x_fit, y_fit, 'r-', label='Fit')
+        plt.fill_between(x_fit, y_fit_lower, y_fit_upper, color='red', alpha=0.3, label='Confidence Interval (1σ)')
+        plt.title('Quadratic Fit of Valid Peak Positions vs. Energy')
+        plt.ylabel('Peak Positions [Channels]')
+        plt.xlim(0, valid_energy[-1]+100)
+        plt.gca().set_xticks([])
+        plt.legend()
 
-    # Calculate the calibrated points using the quadratic fit
-    calibrated_points = quadratic(valid_peak_positions, *popt)
+        # Calculate the calibrated points using the quadratic fit
+        calibrated_points = quadratic(valid_peak_positions, *popt)
 
-    # Calculate the differences between calibrated points and reference points
-    differences = calibrated_points - valid_energy
+        # Calculate the differences between calibrated points and reference points
+        differences = calibrated_points - valid_energy
 
-    # Plot differences as a function of energy
-    plt.subplot(2, 1, 2)  # Bottom subplot
-    plt.scatter(valid_energy, differences, label='Differences', color='orange')
-    plt.axhline(0, color='black', linestyle='--', label='Zero Difference')
+        # Plot differences as a function of energy
+        plt.subplot(2, 1, 2)  # Bottom subplot
+        plt.scatter(valid_energy, differences, label='Differences', color='orange')
+        plt.axhline(0, color='black', linestyle='--', label='Zero Difference')
 
-    plt.fill_between(x_fit, -0.3, 0.3, color='red', alpha=0.3)
-    #plt.axhline(0.3, color='red', linestyle='-')
-    #plt.axhline(-0.3, color='red', linestyle='-')    
-    plt.xlabel('Energy [keV]')
-    plt.ylabel('Difference [keV]')
-    plt.ylim(-1, 1)  # Adjust y limits to make the subplot shorter
+        plt.fill_between(x_fit, -0.3, 0.3, color='red', alpha=0.3)
+        #plt.axhline(0.3, color='red', linestyle='-')
+        #plt.axhline(-0.3, color='red', linestyle='-')    
+        plt.xlabel('Energy [keV]')
+        plt.ylabel('Difference [keV]')
+        plt.ylim(-1, 1)  # Adjust y limits to make the subplot shorter
+        plt.xlim(0, valid_energy[-1]+100)
+        plt.legend()
+        plt.show()
     
+    return popt
+        
     
-    plt.xlim(0, valid_energy[-1]+100)
-    plt.legend()
-    plt.show()
+def calibrate_energy_final(data, height=None, prominence=5000, distance=10, tolerance=30):
+    popt = calibrate_energy(data, height, prominence, distance, tolerance, False)
+    popt2 = recalibrate_energy(data, height, prominence, distance, tolerance, True)
+    popt_final = [popt[0]*(1+popt2[0]), popt[1]*(1+popt2[1]), popt[2]*(1+popt2[2])]
+    return popt_final
