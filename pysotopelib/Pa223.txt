@@ -1,0 +1,66 @@
+$^{223}$Pa
+
+# Levels
+Band1: 3$^{-}$ 368, 5$^{-}$ 619, 7$^{-}$ 870, 9$^{-}$ 1162, 11$^{-}$ 1501
+Band2: 0$^{+}$ 0, 2$^{+}$ 202, 4$^{+}$ 463, 6$^{+}$ 727, 8$^{+}$ 1023, 10$^{+}$ 1352, 12$^{+}$ 1705
+Band3: 1$^{+}$ 25, 3$^{+}$ 216, 5$^{+}$ 488, 7$^{+}$ 762, 9$^{+}$ 1067, 11$^{+}$ 1405, 13$^{+}$ 1771
+Band4: 4$^{-}$ 384, 6$^{+}$ 639, 8$^{-}$ 888, 10$^{-}$ 1195, 12$^{-}$ 1548, 14$^{-}$ 1932
+
+# Transitions
+619 368 Band1 Band1 10
+870 619 Band1 Band1 10
+1162 870 Band1 Band1 10
+1501 1162 Band1 Band1 10
+
+202 0 Band2 Band2 10
+463 202 Band2 Band2 10
+463 202 Band2 Band2 10
+727 463 Band2 Band2 10
+1023 727 Band2 Band2 10
+1352 1023 Band2 Band2 10
+1705 1352 Band2 Band2 10
+
+216 25 Band3 Band3 10
+488 216 Band3 Band3 10
+762 488 Band3 Band3 10
+1067 762 Band3 Band3 10
+1405 1067 Band3 Band3 10
+1771 1405 Band3 Band3 10
+
+639 384 Band4 Band4 10
+888 639 Band4 Band4 10
+1195 888 Band4 Band4 10
+1548 1195 Band4 Band4 10
+1932 1548 Band4 Band4 10
+
+368 202 Band1 Band2 2
+463 368 Band2 Band1 2
+619 463 Band1 Band2 2
+727 619 Band2 Band1 2
+870 727 Band1 Band2 2
+1023 870 Band2 Band1 2
+1162 1023 Band1 Band2 2
+1352 1162 Band2 Band1 2
+1501 1352 Band1 Band2 2
+1705 1501 Band2 Band1 2
+
+25 0 Band3 Band2 2
+202 25 Band2 Band3 2
+216 202 Band3 Band2 2
+463 216 Band2 Band3 2
+488 463 Band3 Band2 2
+727 488 Band2 Band3 2
+762 727 Band3 Band2 2
+
+384 216 Band4 Band3 2
+488 384 Band3 Band4 2
+639 488 Band4 Band3 2
+762 639 Band3 Band4 2
+888 762 Band4 Band3 2
+1067 888 Band3 Band4 2
+1195 1067 Band4 Band3 2
+1405 1195 Band3 Band4 2
+1548 1405 Band4 Band3 2
+1771 1548 Band3 Band4 2
+1932 1771 Band4 Band3 2
+
