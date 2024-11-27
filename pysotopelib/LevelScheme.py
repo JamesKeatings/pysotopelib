@@ -2,33 +2,34 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import re
 
-def read_level_data(filename):
+# READ DATA FROM FILE
+def _read_level_data(filename):
     level_labels = {}
     transitions = []
     
     with open(filename, 'r') as f:
         lines = f.readlines()
         
-        # Read the first line as isotope label and remove it from the lines list
+        # READ ISOTOPE LABEL AND SKIP LINE
         isotope_label = lines[0].strip()
-        lines = lines[1:]  # Remove the first line from further processing
+        lines = lines[1:]
         
-        # Parse level labels
+        # READ LEVEL DATA
         level_section = True
         for line in lines:
             line = line.strip()
             
-            # Check if the transition section starts
+            # CHECK FOR TRANSITIONS FLAG
             if line.startswith("# Transitions"):
                 level_section = False
                 continue
             
-            # Skip comments or empty lines
+            # SKIP COMMENTS OR EMPTY LINES
             if line.startswith("#") or not line:
                 continue
             
             if level_section:
-                # Match any band line as "BandName: label energy, ..."
+                # MATCH BAND NAMES FOR TRANSITIONS
                 band_match = re.match(r'^([^:]+): (.+)$', line)
                 if band_match:
                     band_name, levels_str = band_match.groups()
@@ -38,8 +39,7 @@ def read_level_data(filename):
                         levels.append((label, int(energy)))
                     level_labels[band_name.strip()] = levels
             else:
-                # Parse transitions
-                # Example: "368 202 Band1 Band2 2"
+                # PARSE TRANSITIONS
                 parts = line.split()
                 if len(parts) == 5:
                     start, end = int(parts[0]), int(parts[1])
@@ -49,120 +49,122 @@ def read_level_data(filename):
                     
     return isotope_label, level_labels, transitions
 
+
+# PLOT LEVEL SCHEME
 def plot_level_scheme(filename="Example.txt"):
     size_font = 12
     size_level = 0.3
     size_label_buffer = 0.02
 
-    # Use DejaVu Serif as an alternative to Computer Modern
+    # SETUP FONT
     plt.rcParams.update({
         "font.family": "serif",
         "font.serif": ["DejaVu Serif"],
-        "mathtext.fontset": "cm",  # This will use Computer Modern for mathtext
+        "mathtext.fontset": "cm",
     })
 
-    isotope_label, level_labels, transitions = read_level_data(filename)
+    isotope_label, level_labels, transitions = _read_level_data(filename)
 
-    # Extract energy levels from level_labels
+    # EXTRACT ENERGY LEVELS
     energy_levels = {band: [level[1] for level in levels] for band, levels in level_labels.items()}
 
-    # Create figure and axis
+    # CREATE FIGURE
     fig, ax = plt.subplots(figsize=(8, 12))
 
-    # Set up x-ticks and labels on top
+    # SET UP X AXIS WITH LAVELS
     ax.xaxis.set_label_position('top')
     ax.xaxis.tick_top()
     ax.set_xticks(range(len(energy_levels)))
     ax.set_xticklabels(energy_levels.keys(), fontsize=size_font)
 
-    # Set up y-axis label
+    # Y AXIS TITLE
     ax.set_ylabel("Energy [keV]", fontsize=size_font)
 
-    # Set x-axis title at the bottom
-    ax.set_xlabel(isotope_label, fontsize=40, labelpad=20)  # Set labelpad to position it at the bottom
+    # SET LABEL TO BOTTOM
+    ax.set_xlabel(isotope_label, fontsize=40, labelpad=20)
 
-    # Plot energy levels and add labels
+    # PLOT ENERGY LEVELS
     for i, (band, levels) in enumerate(energy_levels.items()):
         num_levels = len(levels)
         for j in range(num_levels):
             level = levels[j]
             ax.hlines(level, i - size_level, i + size_level, color='black', linewidth=2)
         
-            # Determine label positions
-            if j < num_levels - 1:  # Check if there is a next level
+            # DETERMINE LABEL POSITIONS
+            if j < num_levels - 1:  # CHECK IF LAST LEVEL
                 next_level = levels[j + 1]
-                if abs(level - next_level) < 100:  # Adjust for close levels
+                if abs(level - next_level) < 100:  # SET BELOW FOR WITHIN 100 KEV
                     label_pos = 'below'
                 else:
                     label_pos = 'above'
             else:
-                # For the last level in the list, default to 'above'
+                # DEFAULT POSITION FOR LABELS ABOVE
                 label_pos = 'above'
         
-            # Left label (e.g., "1$^{+}$" or "2$^{-}$") - move closer to the middle
+            # LEFT LABEL POSITION
             left_label, right_label = level_labels[band][j]
             ax.text(i - size_level + size_label_buffer, level - 30 if label_pos == 'below' else level + 10,
                 left_label, fontsize=size_font, ha='left')
         
-            # Right label (energy) - move closer to the middle
+            # RIGHT LABEL POSITION
             ax.text(i + size_level - size_label_buffer, level - 34 if label_pos == 'below' else level + 10,
                 f"{right_label}", fontsize=size_font, ha='right')
 
-    # Plot transitions with labels
+    # PLOT TRANSITIONS
     for (start, end), (band_start, band_end), width in transitions:
         x_start = list(energy_levels.keys()).index(band_start)
         x_end = list(energy_levels.keys()).index(band_end)
     
-        # Normalize width to a maximum of 30
+        # NORMALISE WIDTH
         arrow_width = (width / 100) * 30
         delta = start - end
     
         if band_start == band_end:
-            # Intra-band transition (draw from center)
+            # VERTICAL TRANSITION
             arrow = ax.annotate('', xy=(x_start, end), xytext=(x_start, start),
                             arrowprops=dict(facecolor='black', shrink=0.01, width=arrow_width, headwidth=3*arrow_width))
         else:
-            # Inter-band transition
+            # DIAGONAL TRANSITIONS BASED ON X POSITION OF INITIA AND FINAL BAND
             if x_start < x_end:
-                # Draw from right of start to left of end
                 arrow = ax.annotate('', xy=(x_end - size_level, end), xytext=(x_start + size_level, start),
                                 arrowprops=dict(facecolor='black', shrink=0.01, width=arrow_width, headwidth=10*arrow_width))
             else:
-                # Draw from left of start to right of end
                 arrow = ax.annotate('', xy=(x_end + size_level, end), xytext=(x_start - size_level, start),
                                 arrowprops=dict(facecolor='black', shrink=0.01, width=arrow_width, headwidth=10*arrow_width))
     
-        # Add a label for the transition difference
+        # ADD TRANSITION LABEL WITH BACKGROUND
         mid_x = (x_start + x_end) / 2
         mid_y = (start + end) / 2
         ax.text(mid_x, mid_y, f"{delta}", fontsize=size_font, ha='center', va='center',
             bbox=dict(facecolor='white', edgecolor='none', boxstyle='round,pad=0.3'))
 
-    # Calculate the maximum energy level and set y-axis limits
+    # SET Y AXIS LIMITS
     max_energy = max(max(levels) for levels in energy_levels.values())
-    ax.set_ylim(-1, max_energy + 100)  # Set upper limit to the highest energy level + 100 keV
+    ax.set_ylim(-1, max_energy + 100)
 
-    # Hide the box around the graph
+    # HIDE BOX
     for spine in ax.spines.values():
         spine.set_visible(False)
 
-    # Hide x-axis ticks and labels at the bottom
+    # HIDE X AXIS
     ax.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
 
-    # Add a solid line for the y-axis
+    # ADD SOLID LINE FOR Y AXIS
     ax.spines['left'].set_visible(True)
-    ax.spines['left'].set_linewidth(1)  # Adjust the thickness if needed
+    ax.spines['left'].set_linewidth(1)
 
-    # Hide y-axis right spine and ticks, but keep y-axis left spine and ticks
+    # HIDE TICKS
     ax.spines['right'].set_visible(False)
     ax.tick_params(axis='y', which='both', right=False, labelsize=size_font)
 
-    # Save the plot as an SVG file
+    # SAVE AS SVG
     #plt.savefig('levelscheme.svg', format='svg')
 
-    # Show the plot
+    # SHOW THE LEVEL SCHEME
     plt.show()
 
+
+# PRODUCE EXAMPLE SCHEME FILE
 def example_level_scheme(filename="Example.txt"):
 
     with open(filename, 'w') as f:
