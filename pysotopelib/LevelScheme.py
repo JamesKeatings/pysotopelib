@@ -163,6 +163,68 @@ def plot_level_scheme(filename="Example.txt"):
     # SHOW THE LEVEL SCHEME
     plt.show()
 
+def _extract_numerator(label):
+    """Extract the numerator from a spin-parity label like '(9/2$^{-}$)'."""
+    match = re.match(r'\(?(\d+)/\d+', label)
+    return int(match.group(1)) if match else None
+
+def _build_band_energy_dict(levels):
+    """Build dictionary mapping spin numerators to energies."""
+    d = {}
+    for label, energy in levels:
+        num = _extract_numerator(label)
+        if num is not None:
+            d[num] = energy
+    return d
+
+def plot_interleave_e(filename, mainband, altband):
+    # Read data from file
+    isotope_label, level_labels, transitions = _read_level_data(filename)
+    
+    band2_levels = level_labels.get(mainband, [])
+    band1_levels = level_labels.get(altband, [])
+    band1_dict = _build_band_energy_dict(band1_levels)
+    
+    if len(band2_levels) < 2 or not band1_dict:
+        print("Not enough data in Band2 or Band1")
+        return
+
+    x_vals = []
+    y_deltas = []
+
+    for i in range(len(band2_levels) - 1):
+        label1, e1 = band2_levels[i]
+        label2, e2 = band2_levels[i + 1]
+
+        # Midpoint energy
+        mid_energy = (e1 + e2) / 2
+        
+        # Midpoint spin numerator
+        num1 = _extract_numerator(label1)
+        num2 = _extract_numerator(label2)
+        if num1 is None or num2 is None:
+            continue
+        mid_spin_num = (num1 + num2) / 2
+
+        # Round to nearest integer to match Band1 spins
+        mid_spin_rounded = round(mid_spin_num)
+        
+        if mid_spin_rounded in band1_dict:
+            band1_energy = band1_dict[mid_spin_rounded]
+            delta = band1_energy - mid_energy
+            x_vals.append(mid_spin_num)
+            y_deltas.append(delta)
+
+    # Plotting
+    plt.figure(figsize=(8, 5))
+    plt.plot(x_vals, y_deltas, marker='o')
+    plt.xlabel("2J (h)")
+    plt.ylabel("ΔE (keV)")
+    plt.title(f"{isotope_label}: ΔE({mainband}, {altband}) against 2J")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
 
 # PRODUCE EXAMPLE SCHEME FILE
 def example_level_scheme(filename="Example.txt"):
