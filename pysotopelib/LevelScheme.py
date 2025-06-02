@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import re
+import os
 
 # READ DATA FROM FILE
 def _read_level_data(filename):
@@ -225,6 +226,362 @@ def plot_interleave_e(filename, mainband, altband):
     plt.tight_layout()
     plt.show()
 
+def add_band(filename, bandnumber):
+    isotope_line = ""
+    lines = []
+
+    # CHECK FILE EXISTS
+    if not os.path.exists(filename):
+        # ISOTOPE INFORMATION FOR LABEL
+        mass = input("Enter atomic mass number: ")
+        element = input("Enter element symbol: ")
+        isotope_line = f"$^{{{mass}}}${element}\n"
+        lines = [isotope_line, "# Levels\n"]
+        with open(filename, 'w') as f:
+            f.writelines(lines)
+        print(f"Created file '{filename}' with isotope header and level section.")
+    else:
+        with open(filename, 'r') as f:
+            lines = f.readlines()
+
+    band_label = f"Band{bandnumber}:"
+
+    # CHECK BAND EXISTS
+    if any(line.startswith(band_label) for line in lines):
+        print(f"'{band_label}' already exists in the file.")
+        return
+
+    # CHECK FOR TRANSITIONS FLAG
+    insert_index = len(lines)
+    for i, line in enumerate(lines):
+        if line.strip() == "# Transitions":
+            insert_index = i
+            break
+
+    # ADD BAND
+    lines.insert(insert_index, f"{band_label} \n")
+
+    # WRITE TO FILE
+    with open(filename, 'w') as f:
+        f.writelines(lines)
+
+    print(f"Added '{band_label}' to file.")
+        
+
+def add_level(filename, bandnumber, spin, parity, energy):
+    # CHECK FILE
+    if not os.path.exists(filename):
+        print(f"Error: File '{filename}' does not exist.")
+        return
+
+    band_label = f"Band{bandnumber}:"
+    level_entry = f"({spin}$^{{{'+' if parity else '-'}}}$) {energy}"
+
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+
+    # FIND BAND
+    found = False
+    for i, line in enumerate(lines):
+        if line.startswith(band_label):
+            found = True
+            line = line.strip()
+            existing_levels = line[len(band_label):].split(',')
+
+            # CHECK LEVEL EXISTS
+            for level in existing_levels:
+                level = level.strip()
+                if level and level[-1].isdigit():
+                    try:
+                        existing_energy = int(level.split()[-1])
+                        if existing_energy == energy:
+                            print(f"Level with energy {energy} already exists in '{band_label}'.")
+                            return
+                    except ValueError:
+                        continue  # SKIP
+
+            # ADD LEVEL
+            if line.endswith(':'):
+                lines[i] = f"{band_label} {level_entry}\n"
+            else:
+                lines[i] = f"{line}, {level_entry}\n"
+            break
+
+    if not found:
+        print(f"Error: '{band_label}' not found in the file.")
+        return
+
+    # WRITE FILE
+    with open(filename, 'w') as f:
+        f.writelines(lines)
+
+    print(f"Added level to '{band_label}': {level_entry}")    
+    
+
+def add_transition(filename, start_band, final_band, start_energy, final_energy, intensity):
+    # CHECK FILE
+    if not os.path.exists(filename):
+        print(f"Error: File '{filename}' does not exist.")
+        return
+
+    # CHECK VALID ENERGY
+    if start_energy <= final_energy:
+        print("Error: Starting energy must be higher than final energy.")
+        return
+
+    # FORMAT LINE
+    transition_line = f"{start_energy} {final_energy} Band{start_band} Band{final_band} {intensity}\n"
+
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+
+    # CHECK LEVELS EXIST
+    def band_has_energy(band, energy):
+        label = f"Band{band}:"
+        for line in lines:
+            if line.startswith(label):
+                level_entries = line[len(label):].split(',')
+                for entry in level_entries:
+                    entry = entry.strip()
+                    if entry.endswith(str(energy)):
+                        return True
+        return False
+
+    if not band_has_energy(start_band, start_energy):
+        print(f"Error: Band{start_band} does not contain a level with energy {start_energy}.")
+        return
+
+    if not band_has_energy(final_band, final_energy):
+        print(f"Error: Band{final_band} does not contain a level with energy {final_energy}.")
+        return
+
+    # FIND TRANSITIONS FLAG
+    transition_index = None
+    for i, line in enumerate(lines):
+        if line.strip() == "# Transitions":
+            transition_index = i
+            break
+
+    # ADD TRANSITIONS FLAG IF DOES NOT EXIST
+    if transition_index is None:
+        lines.append("# Transitions\n")
+        lines.append(transition_line)
+    else:
+        # ADD LINE
+        insert_index = transition_index + 1
+        while insert_index < len(lines) and lines[insert_index].strip() and not lines[insert_index].startswith("#"):
+            insert_index += 1
+        lines.insert(insert_index, transition_line)
+
+    # WRITE FILE
+    with open(filename, 'w') as f:
+        f.writelines(lines)
+
+    print(f"Added transition: {transition_line.strip()}")
+
+
+def delete_band(filename, bandnumber):
+    # CHECK FILE
+    if not os.path.exists(filename):
+        print(f"Error: File '{filename}' does not exist.")
+        return
+
+    band_label = f"Band{bandnumber}:"
+    band_token = f"Band{bandnumber}"
+
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+
+    new_lines = []
+    in_transitions = False
+    transition_header_found = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # REMOVE BAND DEFINITION LINE
+        if stripped.startswith(band_label):
+            continue
+
+        # REMOVE TRANSITIONS
+        if stripped == "# Transitions":
+            in_transitions = True
+            transition_header_found = True
+            new_lines.append(line)
+            continue
+
+        if in_transitions:
+            if not stripped or stripped.startswith("#"):
+                new_lines.append(line)
+                continue
+            parts = stripped.split()
+            if len(parts) == 5 and (parts[2] == band_token or parts[3] == band_token):
+                # SKIP TRANSITION USING DELETED BAND
+                continue
+            else:
+                new_lines.append(line)
+        else:
+            new_lines.append(line)
+
+    # WRITE FILE
+    with open(filename, 'w') as f:
+        f.writelines(new_lines)
+
+    print(f"Deleted '{band_label}' and any transitions involving it.")
+
+
+def delete_level(filename, bandnumber, spin, parity, energy):
+    # CHECK FILE
+    if not os.path.exists(filename):
+        print(f"Error: File '{filename}' does not exist.")
+        return
+
+    band_label = f"Band{bandnumber}:"
+    band_token = f"Band{bandnumber}"
+    energy = int(round(energy))
+
+    # FORMAT LINE
+    level_to_remove = f"({spin}$^{{{'+' if parity else '-'}}}$) {energy}"
+
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+
+    new_lines = []
+    band_found = False
+    level_removed = False
+    in_transitions = False
+
+    # FIND BAND LINE
+    for line in lines:
+        stripped = line.strip()
+
+        # MODIFY BAND DEFINITION LINE
+        if stripped.startswith(band_label):
+            band_found = True
+            parts = line.strip().split(":", 1)
+            if len(parts) == 2:
+                levels = parts[1].split(",")
+                cleaned_levels = [lvl.strip() for lvl in levels if lvl.strip() != level_to_remove]
+                if len(cleaned_levels) < len(levels):
+                    level_removed = True
+                new_line = f"{band_label} {', '.join(cleaned_levels)}\n" if cleaned_levels else f"{band_label}\n"
+                new_lines.append(new_line)
+            else:
+                new_lines.append(line)
+            continue
+
+        # REMOVE TRANSITIONS
+        if stripped == "# Transitions":
+            in_transitions = True
+            new_lines.append(line)
+            continue
+
+        if in_transitions:
+            if not stripped or stripped.startswith("#"):
+                new_lines.append(line)
+                continue
+            parts = stripped.split()
+            if len(parts) == 5:
+                e_start = int(parts[0])
+                e_final = int(parts[1])
+                b_start = parts[2]
+                b_final = parts[3]
+
+                if (b_start == band_token and e_start == energy) or (b_final == band_token and e_final == energy):
+                    # SKIP TRANSITION USING DELETED BAND
+                    continue
+
+            new_lines.append(line)
+        else:
+            new_lines.append(line)
+
+    if not band_found:
+        print(f"Band{bandnumber} not found.")
+        return
+
+    if not level_removed:
+        print(f"Level '{level_to_remove}' not found in Band{bandnumber}.")
+        return
+
+    # WRITE FILE
+    with open(filename, 'w') as f:
+        f.writelines(new_lines)
+
+    print(f"Removed level '{level_to_remove}' and any transitions involving it.")
+
+
+def delete_transition(filename, start_band, final_band, start_energy, final_energy):
+    # CHECK FILE
+    if not os.path.exists(filename):
+        print(f"Error: File '{filename}' does not exist.")
+        return
+
+    start_band_token = f"Band{start_band}"
+    final_band_token = f"Band{final_band}"
+    start_energy = int(round(start_energy))
+    final_energy = int(round(final_energy))
+
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+
+    new_lines = []
+    in_transitions = False
+    removed = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        if stripped == "# Transitions":
+            in_transitions = True
+            new_lines.append(line)
+            continue
+
+        if in_transitions:
+            if not stripped or stripped.startswith("#"):
+                new_lines.append(line)
+                continue
+
+            parts = stripped.split()
+            if len(parts) == 5:
+                e_start, e_final = int(parts[0]), int(parts[1])
+                b_start, b_final = parts[2], parts[3]
+
+                if (e_start == start_energy and
+                    e_final == final_energy and
+                    b_start == start_band_token and
+                    b_final == final_band_token):
+                    removed = True
+                    continue  # SKIP MATCHING TRANSITION
+
+            new_lines.append(line)
+        else:
+            new_lines.append(line)
+            
+    # WRITE FILE
+    if removed:
+        with open(filename, 'w') as f:
+            f.writelines(new_lines)
+        print(f"Deleted transition: {start_energy} {final_energy} {start_band_token} {final_band_token}")
+    else:
+        print("Transition not found. Nothing deleted.")
+
+# TEST LEVEL SCHEME EDITS
+def example_level_scheme_edit(filename="Example_edit.txt"):
+	add_band(filename,1)
+	add_band(filename,2)
+	add_level(filename, 1, "15/2", True, 368)
+	add_level(filename, 1, "19/2", False, 619)
+	add_level(filename, 1, "21/2", True, 368)  # Will not be added (duplicate energy)
+	add_level(filename, 2, "15/2", True, 368)
+	add_level(filename, 2, "19/2", False, 619)
+	add_transition(filename, 1, 1, 619, 368, 10)
+	add_band(filename,3)
+	delete_transition(filename, 1, 1, 619, 368)
+	add_transition(filename, 1, 1, 619, 368, 10)
+	delete_level(filename, 2, "19/2", False, 619)
+	add_transition(filename, 1, 1, 619, 368, 10)
+	delete_band(filename,2)
+	
 
 # PRODUCE EXAMPLE SCHEME FILE
 def example_level_scheme(filename="Example.txt"):
