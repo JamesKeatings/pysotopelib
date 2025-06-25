@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import re
 import os
+import math
 
 # READ DATA FROM FILE
 def _read_level_data(filename):
@@ -49,6 +50,34 @@ def _read_level_data(filename):
                     transitions.append(((start, end), (band_start, band_end), width))
                     
     return isotope_label, level_labels, transitions
+
+
+def _extract_numerator(label):
+    """
+    Extract the spin value from a label like '(9/2$^{-}$)' or '(2$^{+}$)'.
+    If the label contains '/2', return numerator/2.0. Otherwise, return the integer.
+    """
+    # CHECK FOR N/2 PATTERN
+    half_match = re.search(r'(\d+)\s*/\s*2', label)
+    if half_match:
+        return float(half_match.group(1)) / 2.0
+
+    # LOOK FOR INTEGAR SPIN
+    whole_match = re.search(r'\(?\s*(\d+)\s*', label)
+    if whole_match:
+        return float(whole_match.group(1))
+
+    return None
+
+
+def _build_band_energy_dict(levels):
+    """Build dictionary mapping spin numerators to energies."""
+    d = {}
+    for label, energy in levels:
+        num = _extract_numerator(label)
+        if num is not None:
+            d[num] = energy
+    return d
 
 
 # PLOT LEVEL SCHEME
@@ -163,68 +192,7 @@ def plot_level_scheme(filename="Example.txt"):
 
     # SHOW THE LEVEL SCHEME
     plt.show()
-
-def _extract_numerator(label):
-    """Extract the numerator from a spin-parity label like '(9/2$^{-}$)'."""
-    match = re.match(r'\(?(\d+)/\d+', label)
-    return int(match.group(1)) if match else None
-
-def _build_band_energy_dict(levels):
-    """Build dictionary mapping spin numerators to energies."""
-    d = {}
-    for label, energy in levels:
-        num = _extract_numerator(label)
-        if num is not None:
-            d[num] = energy
-    return d
-
-def plot_interleave_e(filename, mainband, altband):
-    # Read data from file
-    isotope_label, level_labels, transitions = _read_level_data(filename)
     
-    band2_levels = level_labels.get(mainband, [])
-    band1_levels = level_labels.get(altband, [])
-    band1_dict = _build_band_energy_dict(band1_levels)
-    
-    if len(band2_levels) < 2 or not band1_dict:
-        print("Not enough data in Band2 or Band1")
-        return
-
-    x_vals = []
-    y_deltas = []
-
-    for i in range(len(band2_levels) - 1):
-        label1, e1 = band2_levels[i]
-        label2, e2 = band2_levels[i + 1]
-
-        # Midpoint energy
-        mid_energy = (e1 + e2) / 2
-        
-        # Midpoint spin numerator
-        num1 = _extract_numerator(label1)
-        num2 = _extract_numerator(label2)
-        if num1 is None or num2 is None:
-            continue
-        mid_spin_num = (num1 + num2) / 2
-
-        # Round to nearest integer to match Band1 spins
-        mid_spin_rounded = round(mid_spin_num)
-        
-        if mid_spin_rounded in band1_dict:
-            band1_energy = band1_dict[mid_spin_rounded]
-            delta = band1_energy - mid_energy
-            x_vals.append(mid_spin_num)
-            y_deltas.append(delta)
-
-    # Plotting
-    plt.figure(figsize=(8, 5))
-    plt.plot(x_vals, y_deltas, marker='o')
-    plt.xlabel("2J (h)")
-    plt.ylabel("ΔE (keV)")
-    plt.title(f"{isotope_label}: ΔE({mainband}, {altband}) against 2J")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
 
 def add_band(filename, bandnumber):
     isotope_line = ""
@@ -613,3 +581,177 @@ def example_level_scheme(filename="Example.txt"):
         f.write("755 641 Band2 Band3 2\n")
         f.write("906 755 Band3 Band2 2\n")
 
+def plot_interleave_e(filename, mainband, altband):
+    # READ FROM FILE
+    isotope_label, level_labels, transitions = _read_level_data(filename)
+    
+    band2_levels = level_labels.get(mainband, [])
+    band1_levels = level_labels.get(altband, [])
+    band1_dict = _build_band_energy_dict(band1_levels)
+    
+    if len(band2_levels) < 2 or not band1_dict:
+        print("Not enough data in Band2 or Band1")
+        return
+
+    x_vals = []
+    y_deltas = []
+
+    for i in range(len(band2_levels) - 1):
+        label1, e1 = band2_levels[i]
+        label2, e2 = band2_levels[i + 1]
+
+        # MIDPOINT ENERGY
+        mid_energy = (e1 + e2) / 2
+        
+        # EXTRACT SPIN FROM STRING
+        spin1 = _extract_numerator(label1)
+        spin2 = _extract_numerator(label2)
+        if spin1 is None or spin2 is None:
+            continue
+
+        # MIDPOINT SPIN
+        mid_spin = (spin1 + spin2) / 2
+
+        # LOOK UP SPIN IN DICT
+        if mid_spin in band1_dict:
+            band1_energy = band1_dict[mid_spin]
+            delta = band1_energy - mid_energy
+            x_vals.append(mid_spin)
+            y_deltas.append(delta)
+
+    # PLOT GRAPH
+    plt.figure(figsize=(8, 5))
+    plt.plot(x_vals, y_deltas, marker='o')
+    plt.xlabel("J (ħ)")
+    plt.ylabel("ΔE (keV)")
+    plt.title(f"{isotope_label}: ΔE({mainband}, {altband}) against J")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    
+    
+def plot_alignment(filename, mainband, I0, I2, K):
+    """
+    Read level data from `filename`, extract the levels in `mainband`, and
+    calculate & plot the alignment (i_x) versus ħω and print the Routhian table.
+    
+    Arguments:
+    - filename:    path to the text file in the format expected by _read_level_data()
+    - mainband:    name of the band whose alignment/Routhians you want to plot
+    - I0, I2:      Harris parameters
+    - K:           K-value for I_x = sqrt[I(I+1) – K^2]
+    """
+    # READ FROM FILE
+    isotope_label, level_labels, transitions = _read_level_data(filename)
+    
+    # EXTRACT INFORMATION FROM BAND
+    band_levels = level_labels.get(mainband, [])
+    if len(band_levels) < 2:
+        print(f"Not enough data in band “{mainband}” (need at least two levels).")
+        return
+    
+    # BUILD SPIN, ENERGY LIST FROM LEVELS
+    temp = []
+    for label, energy in band_levels:
+        num = _extract_numerator(label)
+        if num is None:
+            # SKIP LEVEL WITHOUT SPIN
+            continue
+        spin = num
+        temp.append((spin, energy))
+    
+    # CHECK
+    if len(temp) < 2:
+        print(f"No valid spin‐parity labels found in band “{mainband}”.")
+        return
+    
+    # SORT BY SPIN
+    temp.sort(key=lambda se: se[0])
+    spins   = [se[0] for se in temp]
+    energies = [se[1] for se in temp]
+    
+    # DEFINE ARRAY FOR PLOTS
+    hbar_omegas = []
+    i_xs = []
+    
+    # PRINT HEADERS
+    print(f"{'Egamma':>8}  {'I(init)':>8}  {'I_x':>7}  {'i_x':>6}  {'homega':>7}  {'Routhian':>10}  {'I(1)':>7}  {'I(2)':>7}")
+    
+    # LOOK OVER TRANSITIONS
+    for idx in range(1, len(spins)):
+        spin_hi = spins[idx]
+        spin_lo = spins[idx - 1]
+        E_hi    = energies[idx]
+        E_lo    = energies[idx - 1]
+        
+        Egamma = E_hi - E_lo            # KEV
+        I = spin_hi - 1.0               # MIDSPIN
+        
+        # CALCULATE I_x = sqrt[ I(I+1) – K^2 ]
+        K2 = K * K
+        I_x = math.sqrt(max(0.0, I*(I+1) - K2))
+        
+        # BUILD I_{x+1} and I_{x-1} for δω/δI_x
+        Ixp1 = math.sqrt(max(0.0, (I+1)*(I+2) - K2))
+        Ixm1 = math.sqrt(max(0.0, (I-1)*I     - K2))
+        delta_Ix = Ixp1 - Ixm1
+        
+        # ħω = (Eγ in MeV) / ΔI_x
+        e_mev = Egamma / 1000.0
+        if delta_Ix != 0.0:
+            hbar_omega = e_mev / delta_Ix
+        else:
+            hbar_omega = 0.0
+        hw2 = hbar_omega * hbar_omega
+        
+        # HARRIS REFERENCE: i_ref = (I0 + I2·ω^2)·ω
+        i_ref = (I0 + I2 * hw2) * hbar_omega
+        
+        # ALIGNED i_x = I_x – i_ref
+        i_x_align = I_x - i_ref
+        
+        # REFERENCE ENERGY: E_ref = –½·I0·ω^2 – ¼·I2·ω^4 + ⅛·(1/I0)
+        E_ref = -0.5 * I0 * hw2 - 0.25 * I2 * (hw2 * hw2) + 0.125 / I0
+        
+        # EXPERIMENTAL ROUTHIAN: E_exp = 0.0005·(E_hi + E_lo) – I_x·ω
+        E_exp = 0.0005 * (E_hi + E_lo) - I_x * hbar_omega
+        
+        # ROUTHIAN (IN KEV) = 1000·(E_exp – E_ref)
+        Routhian = 1000.0 * (E_exp - E_ref)
+        
+        # J^(1) = (2I + 1) / Eγ (MeV)
+        if e_mev != 0.0:
+            J1 = (2 * I + 1) / e_mev
+        else:
+            J1 = 0.0
+        
+        # J^(2) = 4 / [ ΔEγ (MeV) ], where ΔEγ = Eγ(i) – Eγ(i–1)
+        if idx > 1:
+            Eprev_hi = energies[idx - 1]
+            Eprev_lo = energies[idx - 2]
+            Eg_prev = (Eprev_hi - Eprev_lo) / 1000.0  # in MeV
+            dE = e_mev - Eg_prev
+            if dE != 0.0:
+                J2 = 4.0 / dE
+            else:
+                J2 = 0.0
+        else:
+            J2 = 0.0
+        
+        # PRINT INFORMATION
+        print(f"{Egamma:8.2f}  {spin_hi:8.1f}  {I_x:7.2f}  {i_x_align:6.2f}  {(hbar_omega*1000):7.1f}  {Routhian:10.0f}  {J1:7.1f}  {J2:7.1f}")
+        
+        # FILL ARRAYS
+        hbar_omegas.append(hbar_omega * 1000.0)  # convert to keV
+        i_xs.append(i_x_align)
+    
+    # PLOT i_x vs ħω (keV)
+    plt.figure(figsize=(8, 5))
+    plt.plot(hbar_omegas, i_xs, marker='o', linestyle='-')
+    plt.xlabel(r'$\hbar \omega$ (keV)')
+    plt.ylabel(r'$i_x$')
+    plt.title(f"{isotope_label}: Alignment for “{mainband}”")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()

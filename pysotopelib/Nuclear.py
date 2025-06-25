@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import constants
+import re
 
 def Beta(v: float):
     return v / constants.c
@@ -72,3 +73,51 @@ def GrazingAngle3(A1: int, Z1: int, A2: int, Z2: int, Tlab: float):
     theta = numerator/denominator / Rint
     theta_deg = theta * 180. / np.pi
     return theta_deg
+
+def weisskopf_estimate(multipolarity: str, energy: float, mass: int) -> float:
+    """
+    Calculate the Weisskopf single-particle transition probability (Tsp) for a given multipolarity.
+
+    Parameters:
+    - multipolarity (str): Transition multipolarity, e.g., 'E1', 'M2'
+    - energy (float): Gamma-ray energy Eγ in MeV
+    - mass (int): Mass number A
+
+    Returns:
+    - float: Transition probability in s⁻¹
+    """
+
+    # Validate and parse multipolarity
+    match = re.fullmatch(r'([EM])(\d+)', multipolarity.upper())
+    if not match:
+        raise ValueError("Multipolarity must be in the form 'E1', 'M2', etc.")
+    
+    type_, l_str = match.groups()
+    l = int(l_str)
+
+    energy = energy/1000
+    
+    if type_ == 'E':
+        if l == 1:
+            return 1.025e14 * energy**3 * mass**(2/3)
+        elif l == 2:
+            return 7.276e7 * energy**5 * mass**(4/3)
+        elif l == 3:
+            return 3.339e1 * energy**7 * mass**2
+        elif l == 4:
+            return 1.1e-5 * energy**9 * mass**(8/3)
+        else:
+            raise ValueError(f"E{l} not supported. Only E1, E2, E3, E4 are implemented.")
+    elif type_ == 'M':
+        if l == 1:
+            return 5.6e13 * energy**3
+        elif l == 2:
+            return 3.56e7 * energy**5 * mass**(2/3)
+        elif l == 3:
+            return 16 * energy**7 * mass**(4/3)
+        elif l ==4:
+            return 4.5e-6 * energy **9 * mass**2
+        else:
+            raise ValueError(f"M{l} not supported. Only M1, M2, M3, M4 are implemented.")
+
+
