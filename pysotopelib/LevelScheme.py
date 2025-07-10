@@ -12,39 +12,33 @@ def _read_level_data(filename):
     with open(filename, 'r') as f:
         lines = f.readlines()
         
-        # READ ISOTOPE LABEL AND SKIP LINE
         isotope_label = lines[0].strip()
         lines = lines[1:]
         
-        # READ LEVEL DATA
         level_section = True
         for line in lines:
             line = line.strip()
             
-            # CHECK FOR TRANSITIONS FLAG
             if line.startswith("# Transitions"):
                 level_section = False
                 continue
-            
-            # SKIP COMMENTS OR EMPTY LINES
+
             if line.startswith("#") or not line:
                 continue
             
             if level_section:
-                # MATCH BAND NAMES FOR TRANSITIONS
                 band_match = re.match(r'^([^:]+): (.+)$', line)
                 if band_match:
                     band_name, levels_str = band_match.groups()
                     levels = []
                     for level_str in levels_str.split(','):
                         label, energy = level_str.strip().rsplit(' ', 1)
-                        levels.append((label, int(energy)))
+                        levels.append((label, round(float(energy), 1)))  # Rounded to 1 decimal
                     level_labels[band_name.strip()] = levels
             else:
-                # PARSE TRANSITIONS
                 parts = line.split()
                 if len(parts) == 5:
-                    start, end = int(parts[0]), int(parts[1])
+                    start, end = round(float(parts[0]), 1), round(float(parts[1]), 1)  # Rounded here too
                     band_start, band_end = parts[2], parts[3]
                     width = int(parts[4])
                     transitions.append(((start, end), (band_start, band_end), width))
@@ -138,7 +132,7 @@ def plot_level_scheme(filename="Example.txt"):
         
             # RIGHT LABEL POSITION
             ax.text(i + size_level - size_label_buffer, level - 34 if label_pos == 'below' else level + 10,
-                f"{right_label}", fontsize=size_font, ha='right')
+                f"{right_label:.1f}", fontsize=size_font, ha='right')
 
     # PLOT TRANSITIONS
     for (start, end), (band_start, band_end), width in transitions:
@@ -165,7 +159,7 @@ def plot_level_scheme(filename="Example.txt"):
         # ADD TRANSITION LABEL WITH BACKGROUND
         mid_x = (x_start + x_end) / 2
         mid_y = (start + end) / 2
-        ax.text(mid_x, mid_y, f"{delta}", fontsize=size_font, ha='center', va='center',
+        ax.text(mid_x, mid_y, f"{delta:.1f}", fontsize=size_font, ha='center', va='center',
             bbox=dict(facecolor='white', edgecolor='none', boxstyle='round,pad=0.3'))
 
     # SET Y AXIS LIMITS
