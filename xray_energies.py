@@ -5,7 +5,8 @@ xray_energies.py
 Look up characteristic x-ray emission-line energies for a given element,
 transcribed from the LBNL X-Ray Data Booklet, Table 1-2 ("Photon energies,
 in electron volts, of principal K-, L-, and M-shell emission lines"),
-covering elements 3 <= Z <= 95.
+covering elements 3 <= Z <= 95. Source values are in eV; this script
+converts and reports them in keV.
 Source: https://xdb.lbl.gov/Section1/Table_1-2.pdf
 
 Only the strongest line of each type is tabulated: Ka1, Ka2, Kb1, La1, La2,
@@ -126,11 +127,12 @@ XRAY_LINE_DATA = {
 XRAY_LINE_COLUMNS = ["Ka1", "Ka2", "Kb1", "La1", "La2", "Lb1", "Lb2", "Lg1", "Ma1"]
 
 def format_energy(value):
-    """1234.5 eV -> '1,234.5' (thousands separator, matching the booklet's
-    own formatting), keeping however many decimal places the source gave."""
+    """1234.5 eV -> '1.2345' keV (thousands separator on the integer part),
+    keeping enough precision to preserve the source table's own figures."""
     if value is None:
         return ""
-    return f"{value:,.10g}".rstrip()
+    kev = value / 1000
+    return f"{kev:,.10g}".rstrip()
 
 
 def pad_columns(header, rows, sep="\t\t"):
@@ -174,7 +176,7 @@ def print_report(query, file=sys.stdout):
     lines = entry["lines"]
 
     print(f"=== X-ray emission lines: {sym} (Z={z}) ===", file=file)
-    header = ["Line", "Energy(eV)"]
+    header = ["Line", "Energy (keV)"]
     rows = []
     for col_name, value in zip(XRAY_LINE_COLUMNS, lines):
         if value is None:
