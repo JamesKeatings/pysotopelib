@@ -82,9 +82,9 @@ def plot_level_scheme(filename="Example.txt"):
 
     # SETUP FONT
     plt.rcParams.update({
+        "text.usetex": True,
         "font.family": "serif",
-        "font.serif": ["DejaVu Serif"],
-        "mathtext.fontset": "cm",
+        "text.latex.preamble": r"\usepackage{lmodern} \usepackage{amsmath}",
     })
 
     isotope_label, level_labels, transitions = _read_level_data(filename)
