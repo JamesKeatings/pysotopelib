@@ -329,16 +329,16 @@ GAMMA_DATA = {
     ],
     "228Th": [
         ("84.373", "3", "0.0122", "2", "[8]", False),
-        ("238.632", "2", "0.435", "4", "[8]", True),
-        ("240.987", "6", "0.0410", "5", "[8]", True),
-        ("277.358", "10", "0.0230", "3", "[8]", True),
-        ("300.094", "10", "0.0325", "3", "[8]", True),
-        ("510.77", "10", "0.0818", "10", "[8]", True),  # note: close to 511.003 keV annihilation radiation
-        ("583.191", "2", "0.306", "2", "[8]", True),
-        ("727.330", "9", "0.0669", "9", "[8]", True),
-        ("860.564", "5", "0.0450", "4", "[8]", True),
-        ("1620.735", "10", "0.0149", "5", "[8]", True),
-        ("2614.533", "13", "0.3586", "6", "[8]", True),
+        ("238.632", "2", "0.435", "4", "[8]", False), # note: daughter in equilibrium with parent radionuclide
+        ("240.987", "6", "0.0410", "5", "[8]", False), # note: daughter in equilibrium with parent radionuclide
+        ("277.358", "10", "0.0230", "3", "[8]", False), # note: daughter in equilibrium with parent radionuclide
+        ("300.094", "10", "0.0325", "3", "[8]", False), # note: daughter in equilibrium with parent radionuclide
+        ("510.77", "10", "0.0818", "10", "[8]", False),  # note: close to 511.003 keV annihilation radiation and daughter in equilibrium with parent radionuclide
+        ("583.191", "2", "0.306", "2", "[8]", False), # note: daughter in equilibrium with parent radionuclide
+        ("727.330", "9", "0.0669", "9", "[8]", False), # note: daughter in equilibrium with parent radionuclide
+        ("860.564", "5", "0.0450", "4", "[8]", False), # note: daughter in equilibrium with parent radionuclide
+        ("1620.735", "10", "0.0149", "5", "[8]", False), # note: daughter in equilibrium with parent radionuclide
+        ("2614.533", "13", "0.3586", "6", "[8]", False), # note: daughter in equilibrium with parent radionuclide
     ],
     "239Np": [
         ("106.123", "2", "0.267", "4", "[10]", False),
@@ -354,6 +354,68 @@ GAMMA_DATA = {
         ("74.66", "1", "0.674", "10", "[6]", False),
     ],
 }
+
+
+# ---------------------------------------------------------------------------
+# Half-lives. Each entry: (value [str], unit [str]) with unit one of
+# "y" (years), "d" (days), "h" (hours).
+#
+# NOTE: these are NOT from IAEA-TECDOC-619; they are evaluated values
+# (ENSDF/DDEP-style) added separately. Check them against your preferred
+# evaluation before using them for anything quantitative. Values differ
+# slightly between evaluations (e.g. 137Cs, 207Bi, 152Eu, 243Am).
+# ---------------------------------------------------------------------------
+HALF_LIFE_DATA = {
+    "22Na":  ("2.6018", "y"),
+    "24Na":  ("14.997", "h"),
+    "46Sc":  ("83.79", "d"),
+    "51Cr":  ("27.7025", "d"),
+    "54Mn":  ("312.19", "d"),
+    "55Fe":  ("2.747", "y"),
+    "56Co":  ("77.236", "d"),
+    "57Co":  ("271.74", "d"),
+    "58Co":  ("70.86", "d"),
+    "60Co":  ("5.2711", "y"),
+    "65Zn":  ("243.93", "d"),
+    "75Se":  ("119.78", "d"),
+    "85Sr":  ("64.849", "d"),
+    "88Y":   ("106.626", "d"),
+    "93mNb": ("16.12", "y"),
+    "94Nb":  ("2.03e4", "y"),
+    "95Nb":  ("34.991", "d"),
+    "109Cd": ("461.9", "d"),
+    "111In": ("2.8047", "d"),
+    "113Sn": ("115.09", "d"),
+    "125Sb": ("2.7586", "y"),
+    "125I":  ("59.407", "d"),
+    "134Cs": ("2.0652", "y"),
+    "137Cs": ("30.05", "y"),
+    "133Ba": ("10.551", "y"),
+    "139Ce": ("137.64", "d"),
+    "152Eu": ("13.517", "y"),
+    "154Eu": ("8.601", "y"),
+    "198Au": ("2.6941", "d"),
+    "203Hg": ("46.594", "d"),
+    "207Bi": ("31.55", "y"),
+    "228Th": ("1.9116", "y"),
+    "239Np": ("2.356", "d"),
+    "241Am": ("432.6", "y"),
+    "243Am": ("7370", "y"),
+}
+
+_UNIT_NAMES = {"y": "years", "d": "days", "h": "hours"}
+
+
+def format_half_life(key, long_units=False):
+    """Return a printable half-life string for a nuclide key, e.g.
+    '5.2711 y' (or '5.2711 years' if long_units), or 'n/a' if unknown."""
+    entry = HALF_LIFE_DATA.get(key)
+    if entry is None:
+        return "n/a"
+    value_s, unit = entry
+    if long_units:
+        unit = _UNIT_NAMES.get(unit, unit)
+    return f"{value_s} {unit}"
 
 
 def combine_val_err(value_s, err_digits_s):
@@ -456,6 +518,10 @@ def print_report(nuclide, file=sys.stdout):
         print("Use --list to see all available nuclides.", file=file)
         return 1
 
+    print(f"Nuclide: {key}    Half-life: {format_half_life(key, long_units=True)}",
+          file=file)
+    print("-" * 60, file=file)
+
     # --- X-ray table -------------------------------------------------
     if xray_rows:
         print(f"=== X-ray standards: {key} ===", file=file)
@@ -530,13 +596,20 @@ def list_nuclides():
         set(XRAY_DATA.keys()) | set(GAMMA_DATA.keys()), key=nuclide_sort_key
     )
     print("Available nuclides (ordered by Z, then mass number):")
+    rows = []
     for k in all_keys:
         tags = []
         if k in XRAY_DATA:
             tags.append("X-ray")
         if k in GAMMA_DATA:
             tags.append("gamma")
-        print(f"  {k}\t({', '.join(tags)})")
+        rows.append([k, format_half_life(k), f"({', '.join(tags)})"])
+    header_line, row_lines = pad_columns(
+        ["Nuclide", "Half-life", "Data"], rows, sep="    "
+    )
+    print("  " + header_line)
+    for line in row_lines:
+        print("  " + line)
 
 
 def main():
